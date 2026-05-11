@@ -36,6 +36,8 @@ export interface DuckSnapshot {
   behavior?: string;
   drives?: Record<string, number>;
   mood?: Record<string, number>;
+  /// Heavily-smoothed average motor-bus voltage in volts.
+  battery_v?: number;
 }
 
 export interface RootState {
