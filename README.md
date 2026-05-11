@@ -10,25 +10,34 @@ state, map view, brain HUD; sleeps cutely when the robot is offline.
   - `microduck_brain` sim (`sim/web_server.py`)
   - `microduck_runtime` Pi (`maploc_web.rs`, with planned joint extension)
 
-## Milestone 1 — sim loop
+## Running
 
-Two terminals:
+Either backend serves the same `/state.json` shape on **port 9876**, so
+the PWA's default Robot URL works against both:
 
 ```bash
-# 1) sim (publishes telemetry on :8080)
-cd ~/MISC/microduck_brain
-uv run scripts/run_sim.py --ducks 1
+# A) against the sim
+cd ~/MISC/microduck_brain && uv run scripts/run_sim.py --ducks 1
 
-# 2) PWA dev server
+# B) against the real robot (on the Pi)
+microduck_runtime                    # joints + IMU + commands. Duck stays at origin (no odometry).
+microduck_runtime --stream           # + odometry → duck walks across the floor in the 3D view
+microduck_runtime --maploc           # + map, planner path, tap-to-goal
+microduck_runtime --maploc --stream  # full fidelity
+```
+
+Then the PWA:
+
+```bash
 cd ~/MISC/microduck_app
 npm install        # first time only
 npm run kinematics # parses MJCF, copies STLs into public/robot
 npm run dev        # → http://localhost:5173
 ```
 
-Open the dev URL on your phone (same Wi-Fi) by replacing `localhost`
-with your laptop's LAN IP. Tap the gear icon → set Robot URL to
-`http://<laptop-ip>:8080`.
+From your phone (same Wi-Fi), open `http://<host-ip>:5173`. The PWA
+auto-points at `<same-host>:9876` for telemetry. Override via the gear
+icon if your robot is on a different machine.
 
 What you should see:
 - A live 3D microduck driven by the sim's joint state

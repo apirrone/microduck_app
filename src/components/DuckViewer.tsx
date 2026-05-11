@@ -148,23 +148,32 @@ export function DuckViewer(props: Props) {
         // sleep poses).
         groundFeet(rig);
 
-        // Follow camera: lerp the orbit target toward the duck's
-        // (now-grounded) position; preserve user's orbit offset.
-        newTarget.copy(rig.placer.position);
-        // Aim camera roughly at the duck's torso, not its feet.
-        newTarget.y += 0.18;
+        // Follow camera: lerp the orbit target horizontally toward the
+        // duck's (now-grounded) position; preserve user's orbit offset.
+        // Y is pinned — foot-grounding moves placer.y each frame as the
+        // joints interpolate, and we don't want the camera to bob with
+        // it. Small XZ deadzone kills mm-scale odometry jitter.
+        const TORSO_Y = 0.18;
+        const DEAD_M = 0.015;
+        newTarget.set(rig.placer.position.x, TORSO_Y, rig.placer.position.z);
         if (!camInited) {
           followTarget.copy(newTarget);
           controls.target.copy(followTarget);
           camera.position.set(followTarget.x + 0.55, followTarget.y + 0.25, followTarget.z + 0.65);
           camInited = true;
         } else {
-          // Smooth follow ~3 Hz half-life.
-          const cf = 1 - Math.exp(-dt * 6);
-          tmpDelta.copy(newTarget).sub(followTarget).multiplyScalar(cf);
-          followTarget.add(tmpDelta);
-          controls.target.add(tmpDelta);
-          camera.position.add(tmpDelta);
+          const ddx = newTarget.x - followTarget.x;
+          const ddz = newTarget.z - followTarget.z;
+          const dist = Math.hypot(ddx, ddz);
+          if (dist > DEAD_M) {
+            // Smooth follow ~1.5 Hz half-life — slow enough that pose
+            // jitter washes out, fast enough that the duck stays framed.
+            const cf = 1 - Math.exp(-dt * 3);
+            tmpDelta.set(ddx * cf, 0, ddz * cf);
+            followTarget.add(tmpDelta);
+            controls.target.add(tmpDelta);
+            camera.position.add(tmpDelta);
+          }
         }
       }
 

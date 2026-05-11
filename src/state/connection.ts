@@ -21,13 +21,14 @@ export const asleep = createMemo(() => now() - lastSeenMs() > STALE_MS);
 export const mapBlob = createSignal<Blob | null>(null);
 
 function defaultRobotUrl(): string {
-  // Default to port 8080 on whatever host is serving the PWA. Works for
-  // both `localhost` (laptop) and a LAN IP (phone hitting the dev server).
+  // Port 9876 is the real robot's default (microduck_runtime --web-port).
+  // The sim publishes on the same port too, so the same default works for
+  // both. Override via the gear menu when needed.
   if (typeof window !== "undefined") {
     const host = window.location.hostname || "localhost";
-    return `${window.location.protocol}//${host}:8080`;
+    return `${window.location.protocol}//${host}:9876`;
   }
-  return "http://localhost:8080";
+  return "http://localhost:9876";
 }
 
 let stopped = false;

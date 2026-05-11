@@ -60,12 +60,12 @@ export function MapView() {
         </div>
         <div class="text-[11px] text-slate2-600">tap to send goal</div>
       </div>
-      <div class="flex-1 grid place-items-center overflow-hidden rounded-xl bg-cream-100 ring-1 ring-slate2-100">
+      <div class="flex-1 overflow-hidden rounded-xl bg-cream-100 ring-1 ring-slate2-100">
         <canvas
           ref={canvas!}
           width="1"
           height="1"
-          style="image-rendering: pixelated; max-width:100%; max-height:100%; width:auto; height:auto;"
+          style="image-rendering: pixelated; width:100%; height:100%; object-fit:contain; display:block;"
           onClick={onCanvasClick}
         />
       </div>
