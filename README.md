@@ -6,58 +6,78 @@ state, map view, brain HUD; sleeps cutely when the robot is offline.
 ## Stack
 - SolidJS + Vite + Tailwind, three.js for the 3D viewer
 - PWA via `vite-plugin-pwa` (offline shell + service worker)
-- Backend-agnostic: the same JSON shape is served by both
+- Backend-agnostic: same JSON shape served by
   - `microduck_brain` sim (`sim/web_server.py`)
-  - `microduck_runtime` Pi (`maploc_web.rs`, with planned joint extension)
+  - `microduck_runtime` Pi (`maploc_web.rs`)
 
-## Running
+## Run
 
-Either backend serves the same `/state.json` shape on **port 9876**, so
-the PWA's default Robot URL works against both:
+### Sim (laptop, one process)
 
 ```bash
-# A) against the sim
+# terminal 1
 cd ~/MISC/microduck_brain && uv run scripts/run_sim.py --ducks 1
 
-# B) against the real robot (on the Pi)
-microduck_runtime                    # joints + IMU + commands. Duck stays at origin (no odometry).
-microduck_runtime --stream           # + odometry → duck walks across the floor in the 3D view
-microduck_runtime --maploc           # + map, planner path, tap-to-goal
-microduck_runtime --maploc --stream  # full fidelity
+# terminal 2
+cd ~/MISC/microduck_app && npm install && npm run dev
 ```
 
-Then the PWA:
+Open `http://localhost:5173`. From your phone on the same Wi-Fi: replace
+`localhost` with your laptop's IP.
+
+### Real robot
+
+The runtime serves `/state.json`, `/map.pgm`, `/goal`, `/command` on
+port 9876. To get the PWA to your phone, install it on the Pi itself.
+
+#### Install on the Pi
 
 ```bash
+# From your laptop, after building:
 cd ~/MISC/microduck_app
-npm install        # first time only
-npm run kinematics # parses MJCF, copies STLs into public/robot
-npm run dev        # → http://localhost:5173
+DUCK_HOST=pi@duck.local npm run deploy
 ```
 
-From your phone (same Wi-Fi), open `http://<host-ip>:5173`. The PWA
-auto-points at `<same-host>:9876` for telemetry. Override via the gear
-icon if your robot is on a different machine.
+That `rsync`s the built bundle + systemd unit to the Pi and runs the
+installer. It enables `microduck-app.service` to serve `dist/` on
+**port 8080** under `python3 -m http.server`.
 
-What you should see:
-- A live 3D microduck driven by the sim's joint state
-- "🦆 Duck" tab: brain HUD (drives + behaviour) when the sim is up
-- "🗺️ Map" tab: blank for now (sim has no maploc yet)
-- Stop the sim → app drops into 💤 sleeping mode with floating Z's
+Then on any phone / tablet on the same Wi-Fi:
 
-## Endpoints (sim or robot)
-| Method | Path          | Purpose                                       |
-|--------|---------------|-----------------------------------------------|
-| GET    | /state.json   | Pose + joints + brain bits                    |
-| GET    | /map.pgm      | Occupancy grid (real Pi only — sim returns 503)|
-| POST   | /goal         | Tap-to-goto target in world frame             |
-| POST   | /command      | `{"cmd":"startle"|"quack"|...}`               |
+```
+http://duck.local:8080/
+```
+
+iOS Safari → Share → **Add to Home Screen**.
+Android Chrome → ⋮ → **Add to Home Screen**.
+
+You'll get a launcher icon that opens fullscreen, no browser chrome.
+
+#### Updating
+
+`npm run deploy` again. Service restarts automatically. Service worker
+fetches the new bundle on next launch.
+
+#### Manual install (without npm)
+
+If you just want to install from a GitHub release on the Pi:
+
+```bash
+curl -sSL https://github.com/apirrone/microduck_app/releases/latest/download/microduck-app.tar.gz \
+  | sudo tar -xz -C /tmp/microduck_app/
+sudo bash /tmp/microduck_app/deploy/install.sh --local
+```
+
+Tag a release with `git tag vX.Y && git push --tags`; the GitHub Action
+in `.github/workflows/release.yml` builds and publishes the tarball.
 
 ## Layout
+
 ```
-public/robot/        kinematics.json + STL meshes (built by scripts/)
-scripts/build_kinematics.py   MJCF → kinematics.json + copies STLs
-src/components/      DuckViewer, MapView, BrainHUD, SettingsSheet
-src/duck/            three.js rig builder + sleep pose
-src/state/           connection + telemetry types
+public/robot/                kinematics.json + STL meshes (built by scripts/)
+scripts/build_kinematics.py  MJCF → kinematics.json + copies STLs
+src/components/              DuckViewer, MapView, BrainHUD, SettingsSheet, BatteryPill
+src/duck/                    three.js rig builder + sleep pose
+src/state/                   connection + telemetry types
+deploy/                      systemd unit + install.sh for the Pi
 ```

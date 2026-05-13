@@ -18,7 +18,9 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 ROOT = Path(__file__).resolve().parent.parent
-MJCF_DIR = (
+# Sibling-checkout default; override with $MJCF_DIR_OVERRIDE for CI or
+# unusual layouts.
+_DEFAULT_MJCF_DIR = (
     Path.home()
     / "MISC"
     / "mjlab_microduck"
@@ -27,6 +29,8 @@ MJCF_DIR = (
     / "robot"
     / "microduck"
 )
+import os
+MJCF_DIR = Path(os.environ.get("MJCF_DIR_OVERRIDE", _DEFAULT_MJCF_DIR))
 MJCF_FILE = MJCF_DIR / "robot_walk.xml"
 ASSET_DIR = MJCF_DIR / "assets"
 

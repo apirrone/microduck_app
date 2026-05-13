@@ -21,9 +21,10 @@ export const asleep = createMemo(() => now() - lastSeenMs() > STALE_MS);
 export const mapBlob = createSignal<Blob | null>(null);
 
 function defaultRobotUrl(): string {
-  // Port 9876 is the real robot's default (microduck_runtime --web-port).
-  // The sim publishes on the same port too, so the same default works for
-  // both. Override via the gear menu when needed.
+  // Port 9876 is the real robot's default (microduck_runtime --web-port);
+  // the sim publishes on the same port too. When the PWA is served from
+  // the Pi itself (the recommended deployment), `window.location.host`
+  // already resolves to the duck — no gear-menu step needed.
   if (typeof window !== "undefined") {
     const host = window.location.hostname || "localhost";
     return `${window.location.protocol}//${host}:9876`;

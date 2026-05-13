@@ -7,7 +7,8 @@
     "kinematics": "python3 scripts/build_kinematics.py",
     "dev": "vite",
     "build": "npm run kinematics && tsc -b && vite build",
-    "preview": "vite preview --host"
+    "preview": "vite preview --host",
+    "deploy": "npm run build && rsync -a --delete dist/ deploy/ ${DUCK_HOST:-duck.local}:/tmp/microduck_app/ && ssh ${DUCK_HOST:-duck.local} 'sudo bash /tmp/microduck_app/deploy/install.sh --local'"
   },
   "dependencies": {
     "@solid-primitives/storage": "^4.3.0",
@@ -16,7 +17,6 @@
   },
   "devDependencies": {
     "@types/three": "^0.171.0",
-    "@vitejs/plugin-basic-ssl": "^2.3.0",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.5.0",
     "tailwindcss": "^3.4.17",

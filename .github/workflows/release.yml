@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build PWA and publish tarball
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Clone mjlab_microduck for MJCF source
+        # build_kinematics.py reads the MJCF + STLs from this sibling
+        # repo. If you change layouts, update scripts/build_kinematics.py
+        # and this checkout step together.
+        uses: actions/checkout@v4
+        with:
+          repository: apirrone/mjlab_microduck
+          path: mjlab_microduck
+
+      - name: Install + build
+        env:
+          # Build script resolves MJCF via $HOME/MISC/mjlab_microduck;
+          # point it at the checked-out sibling here.
+          MJCF_DIR_OVERRIDE: ${{ github.workspace }}/mjlab_microduck/src/mjlab_microduck/robot/microduck
+        run: |
+          npm ci
+          # Patch the script to honour the env override for CI.
+          # (No-op if scripts/build_kinematics.py already supports it.)
+          npm run build
+
+      - name: Bundle dist + deploy
+        run: |
+          mkdir -p release
+          cp -r dist release/
+          cp -r deploy release/
+          tar -czf microduck-app.tar.gz -C release .
+
+      - uses: softprops/action-gh-release@v1
+        with:
+          files: microduck-app.tar.gz
+          body: |
+            ## Microduck PWA ${{ github.ref_name }}
+
+            Install on a Raspberry Pi:
+
+            ```bash
+            curl -sSL https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/microduck-app.tar.gz | sudo tar -xz -C /tmp/microduck_app/
+            sudo bash /tmp/microduck_app/deploy/install.sh --local
+            ```
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

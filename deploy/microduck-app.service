@@ -1,0 +1,19 @@
+[Unit]
+Description=Microduck PWA static server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Plain `python3 -m http.server` — no extra packages required, ~5 MB
+# RAM, fine for one phone polling. The PWA's service worker caches
+# everything on first load so there's almost no traffic after that.
+ExecStart=/usr/bin/python3 -m http.server 8080 --bind 0.0.0.0 --directory /var/www/microduck
+Restart=on-failure
+RestartSec=3
+# Run unprivileged. Port 8080 doesn't need CAP_NET_BIND_SERVICE.
+User=nobody
+Group=nogroup
+
+[Install]
+WantedBy=multi-user.target
