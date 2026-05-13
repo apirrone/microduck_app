@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/main.tsx","./src/components/BatteryPill.tsx","./src/components/BrainHUD.tsx","./src/components/DuckViewer.tsx","./src/components/MapView.tsx","./src/components/SettingsSheet.tsx","./src/components/StatusPill.tsx","./src/duck/kinematics.ts","./src/state/connection.ts","./src/state/telemetry.ts","./vite.config.ts"],"version":"5.9.3"}

@@ -211,36 +211,35 @@ export function setJointAngles(rig: DuckRig, q: number[]) {
   }
 }
 
-// Sitting / curled-up sleeping pose. Joint signs mirror the MJCF ranges:
-//   - left_hip_pitch  ∈ [0,  +1.57]   right_hip_pitch ∈ [-1.57, 0]
-//   - left_knee       ∈ [-1.92, 0]    right_knee      ∈ [0, +1.92]
-//   - left_ankle / right_ankle: symmetric ±1.57
-//   - neck_pitch ∈ [-1.22, +2.09] — positive folds neck down/forward
-//   - head_pitch ∈ [-1.22, +1.22]  — positive tucks chin down
+// Sleeping = "sitting" keyframe from
+// `mjlab_microduck/.../robot/microduck/scene.xml`. The ctrl values are
+// in actuator order; we map them by joint name so changes in ordering
+// upstream don't silently break the pose. Small breathing wobble layered
+// on neck_pitch.
+const SITTING_POSE: Record<string, number> = {
+  left_hip_yaw:     0.532,
+  left_hip_roll:    0.567,
+  left_hip_pitch:  -0.0089,
+  left_knee:       -1.72,
+  left_ankle:      -0.0274,
+  neck_pitch:      -1.22,
+  head_pitch:       1.23,
+  head_yaw:         0.00119,
+  head_roll:       -0.0036,
+  right_hip_yaw:   -0.533,
+  right_hip_roll:  -0.701,
+  right_hip_pitch:  0.0084,
+  right_knee:       1.63,
+  right_ankle:      0.0115,
+};
+
 export function applySleepPose(rig: DuckRig, t: number) {
-  const breathe = Math.sin(t * 1.4) * 0.025;
-  const pose: Record<string, number> = {
-    // Legs folded under, knees fully bent.
-    left_hip_yaw: 0.0,
-    right_hip_yaw: 0.0,
-    left_hip_roll: 0.0,
-    right_hip_roll: 0.0,
-    left_hip_pitch:  1.45,
-    right_hip_pitch: -1.45,
-    left_knee:  -1.85,
-    right_knee:  1.85,
-    left_ankle:  0.6,
-    right_ankle: -0.6,
-    // Head tucked forward + slight roll.
-    neck_pitch: 1.6 + breathe * 0.5,
-    head_pitch: 1.0,
-    head_yaw:   0.0,
-    head_roll:  0.0,
-  };
-  for (const [name, ang] of Object.entries(pose)) {
+  const breathe = Math.sin(t * 1.4) * 0.03;
+  for (const [name, ang] of Object.entries(SITTING_POSE)) {
     const j = rig.joints.get(name);
     if (!j) continue;
-    const rot = new THREE.Quaternion().setFromAxisAngle(j.axis, ang);
+    const a = name === "neck_pitch" ? ang + breathe : ang;
+    const rot = new THREE.Quaternion().setFromAxisAngle(j.axis, a);
     j.body.quaternion.copy(j.baseQuat).multiply(rot);
   }
   // Body height is resolved by groundFeet() — once the legs fold, the

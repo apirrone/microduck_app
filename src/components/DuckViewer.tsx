@@ -242,7 +242,7 @@ function spawnZ(layer: HTMLDivElement) {
     "absolute font-extrabold text-2xl select-none animate-zfloat text-mint-600/80";
   const rect = layer.getBoundingClientRect();
   el.style.left = `${rect.width * 0.5 + (Math.random() - 0.5) * 30}px`;
-  el.style.top = `${rect.height * 0.32}px`;
+  el.style.top = `${rect.height * 0.45}px`;
   layer.appendChild(el);
   setTimeout(() => el.remove(), 3200);
 }
