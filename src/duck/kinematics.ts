@@ -211,31 +211,51 @@ export function setJointAngles(rig: DuckRig, q: number[]) {
   }
 }
 
-// Sleeping = "sitting" keyframe from
-// `mjlab_microduck/.../robot/microduck/scene.xml`. The ctrl values are
-// in actuator order; we map them by joint name so changes in ordering
-// upstream don't silently break the pose. Small breathing wobble layered
-// on neck_pitch.
-const SITTING_POSE: Record<string, number> = {
-  left_hip_yaw:     0.532,
-  left_hip_roll:    0.567,
-  left_hip_pitch:  -0.0089,
-  left_knee:       -1.72,
-  left_ankle:      -0.0274,
-  neck_pitch:      -1.22,
-  head_pitch:       1.23,
-  head_yaw:         0.00119,
-  head_roll:       -0.0036,
-  right_hip_yaw:   -0.533,
-  right_hip_roll:  -0.701,
-  right_hip_pitch:  0.0084,
-  right_knee:       1.63,
-  right_ankle:      0.0115,
+// Sleeping = "sitting" keyframe from each variant's MJCF scene.xml.
+// Mapped by joint name so a future upstream re-ordering doesn't silently
+// break the pose. Small breathing wobble is layered on `neck_pitch`.
+//
+// v1   : scene.xml `sitting` keyframe (legacy mechanical design).
+// v1.5 : scene.xml `SIT` keyframe (new legs, head folds the other way).
+const SITTING_POSES: Record<string, Record<string, number>> = {
+  v1: {
+    left_hip_yaw:     0.532,
+    left_hip_roll:    0.567,
+    left_hip_pitch:  -0.0089,
+    left_knee:       -1.72,
+    left_ankle:      -0.0274,
+    neck_pitch:      -1.22,
+    head_pitch:       1.23,
+    head_yaw:         0.00119,
+    head_roll:       -0.0036,
+    right_hip_yaw:   -0.533,
+    right_hip_roll:  -0.701,
+    right_hip_pitch:  0.0084,
+    right_knee:       1.63,
+    right_ankle:      0.0115,
+  },
+  "v1.5": {
+    left_hip_yaw:     0.0,
+    left_hip_roll:    0.0,
+    left_hip_pitch:  -0.5236,
+    left_knee:        1.0472,
+    left_ankle:       0.0,
+    neck_pitch:       1.2217,
+    head_pitch:      -1.2217,
+    head_yaw:         0.0,
+    head_roll:        0.0,
+    right_hip_yaw:    0.0,
+    right_hip_roll:   0.0,
+    right_hip_pitch:  0.5236,
+    right_knee:      -1.0472,
+    right_ankle:      0.0,
+  },
 };
 
-export function applySleepPose(rig: DuckRig, t: number) {
+export function applySleepPose(rig: DuckRig, t: number, version: string = "v1.5") {
+  const pose = SITTING_POSES[version] ?? SITTING_POSES["v1.5"];
   const breathe = Math.sin(t * 1.4) * 0.03;
-  for (const [name, ang] of Object.entries(SITTING_POSE)) {
+  for (const [name, ang] of Object.entries(pose)) {
     const j = rig.joints.get(name);
     if (!j) continue;
     const a = name === "neck_pitch" ? ang + breathe : ang;

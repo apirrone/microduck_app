@@ -161,7 +161,7 @@ export function DuckViewer(props: Props) {
 
       if (rig) {
         if (props.asleep) {
-          applySleepPose(rig, t / 1000);
+          applySleepPose(rig, t / 1000, currentVersion ?? "v1.5");
         } else {
           const q = props.snapshot?.joints;
           if (q) {
