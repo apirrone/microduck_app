@@ -47,7 +47,12 @@ tar -xzf "${tarball}" -C "${tmp}"
 
 say "installing PWA → ${WWW_DIR}"
 mkdir -p "${WWW_DIR}"
-rsync -a --delete "${tmp}/dist/" "${WWW_DIR}/"
+rsync -a --delete \
+  --exclude '_serve.py' \
+  "${tmp}/dist/" "${WWW_DIR}/"
+# Ship the threaded static server alongside the PWA so the systemd
+# unit can exec it. Hidden-prefix name avoids shadowing any PWA route.
+install -m 0644 "${tmp}/deploy/serve.py" "${WWW_DIR}/_serve.py"
 chown -R nobody:nogroup "${WWW_DIR}"
 
 say "installing systemd unit"

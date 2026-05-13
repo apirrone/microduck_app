@@ -28,15 +28,34 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // .json deliberately excluded — /state.json is live telemetry,
-        // never cache it. The duck kinematics.json is loaded once at
-        // app start; network-fetch is fine.
-        globPatterns: ["**/*.{js,css,html,svg,png,webp,stl}"],
-        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
-        // Don't intercept the runtime/sim HTTP API. The PWA dev origin
-        // is different from the API origin so workbox wouldn't try by
-        // default, but spell it out so a future same-origin deploy
-        // doesn't accidentally cache live data.
+        // Precache only the lightweight app shell — HTML + JS + CSS +
+        // icons. The 14 MB of STL meshes are NOT precached: that's
+        // what made first install painfully slow over the Pi's
+        // single-threaded server. They're served fresh on demand and
+        // cached via `runtimeCaching` below, so once they're fetched
+        // once they're available offline.
+        globPatterns: ["**/*.{js,css,html,svg,png,webp}"],
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname.endsWith(".stl"),
+            handler: "CacheFirst",
+            options: {
+              cacheName: "microduck-meshes",
+              expiration: { maxEntries: 64, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            urlPattern: ({ url }) => url.pathname === "/robot/kinematics.json",
+            handler: "CacheFirst",
+            options: {
+              cacheName: "microduck-rig",
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
+        // Don't intercept the runtime/sim HTTP API.
         navigateFallbackDenylist: [/^\/state\.json/, /^\/map\.pgm/, /^\/goal/, /^\/command/],
       },
       // Dev SW disabled — kept causing stale /state.json and tripping

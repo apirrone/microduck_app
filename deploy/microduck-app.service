@@ -5,10 +5,10 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-# Plain `python3 -m http.server` — no extra packages required, ~5 MB
-# RAM, fine for one phone polling. The PWA's service worker caches
-# everything on first load so there's almost no traffic after that.
-ExecStart=/usr/bin/python3 -m http.server 8080 --bind 0.0.0.0 --directory /var/www/microduck
+# Multi-threaded stdlib server with gzip support. Single-threaded
+# `python3 -m http.server` couldn't handle the PWA's first-load fan-out
+# (30+ parallel mesh fetches) and made phones time out. See serve.py.
+ExecStart=/usr/bin/python3 /var/www/microduck/_serve.py --directory /var/www/microduck --port 8080
 Restart=on-failure
 RestartSec=3
 # Run unprivileged. Port 8080 doesn't need CAP_NET_BIND_SERVICE.
