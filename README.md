@@ -1,83 +1,35 @@
 # microduck_app
 
-PWA companion for the microduck robot. Tamagotchi-style: live 3D
-state, map view, brain HUD; sleeps cutely when the robot is offline.
+PWA companion for the [microduck](https://github.com/apirrone/microduck_runtime)
+robot. Tamagotchi-style: live 3D state, map view, brain HUD, battery,
+commands; sleeps cutely when the robot is offline.
 
-## Stack
-- SolidJS + Vite + Tailwind, three.js for the 3D viewer
-- PWA via `vite-plugin-pwa` (offline shell + service worker)
-- Backend-agnostic: same JSON shape served by
-  - `microduck_brain` sim (`sim/web_server.py`)
-  - `microduck_runtime` Pi (`maploc_web.rs`)
-
-## Run
-
-### Sim (laptop, one process)
+## Install on the Pi
 
 ```bash
-# terminal 1
-cd ~/MISC/microduck_brain && uv run scripts/run_sim.py --ducks 1
-
-# terminal 2
-cd ~/MISC/microduck_app && npm install && npm run dev
+curl -sSL https://raw.githubusercontent.com/apirrone/microduck_app/main/install.sh | sudo bash
 ```
 
-Open `http://localhost:5173`. From your phone on the same Wi-Fi: replace
-`localhost` with your laptop's IP.
+That downloads the latest release tarball, drops the PWA at
+`/var/www/microduck/`, and enables a `microduck-app.service` that
+serves it on port 8080.
 
-### Real robot
+Pi-side footprint: ~20 MB on disk, ~10 MB RAM. Only requires `python3`
++ `curl` + `tar` + `rsync` + `systemd`, all preinstalled on Pi OS.
 
-The runtime serves `/state.json`, `/map.pgm`, `/goal`, `/command` on
-port 9876. To get the PWA to your phone, install it on the Pi itself.
+Re-run any time to update.
 
-#### Install on the Pi
+## Open on your phone
 
-```bash
-# From your laptop, after building:
-cd ~/MISC/microduck_app
-DUCK_HOST=pi@duck.local npm run deploy
-```
-
-That `rsync`s the built bundle + systemd unit to the Pi and runs the
-installer. It enables `microduck-app.service` to serve `dist/` on
-**port 8080** under `python3 -m http.server`.
-
-Then on any phone / tablet on the same Wi-Fi:
+Same Wi-Fi as the Pi:
 
 ```
 http://duck.local:8080/
 ```
 
+(Or `http://<pi-ip>:8080/` if mDNS doesn't reach.)
+
 iOS Safari → Share → **Add to Home Screen**.
 Android Chrome → ⋮ → **Add to Home Screen**.
 
-You'll get a launcher icon that opens fullscreen, no browser chrome.
-
-#### Updating
-
-`npm run deploy` again. Service restarts automatically. Service worker
-fetches the new bundle on next launch.
-
-#### Manual install (without npm)
-
-If you just want to install from a GitHub release on the Pi:
-
-```bash
-curl -sSL https://github.com/apirrone/microduck_app/releases/latest/download/microduck-app.tar.gz \
-  | sudo tar -xz -C /tmp/microduck_app/
-sudo bash /tmp/microduck_app/deploy/install.sh --local
-```
-
-Tag a release with `git tag vX.Y && git push --tags`; the GitHub Action
-in `.github/workflows/release.yml` builds and publishes the tarball.
-
-## Layout
-
-```
-public/robot/                kinematics.json + STL meshes (built by scripts/)
-scripts/build_kinematics.py  MJCF → kinematics.json + copies STLs
-src/components/              DuckViewer, MapView, BrainHUD, SettingsSheet, BatteryPill
-src/duck/                    three.js rig builder + sleep pose
-src/state/                   connection + telemetry types
-deploy/                      systemd unit + install.sh for the Pi
-```
+The PWA auto-points at the runtime's API on port 9876.

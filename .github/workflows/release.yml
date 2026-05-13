@@ -24,24 +24,9 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Clone mjlab_microduck for MJCF source
-        # build_kinematics.py reads the MJCF + STLs from this sibling
-        # repo. If you change layouts, update scripts/build_kinematics.py
-        # and this checkout step together.
-        uses: actions/checkout@v4
-        with:
-          repository: apirrone/mjlab_microduck
-          path: mjlab_microduck
-
       - name: Install + build
-        env:
-          # Build script resolves MJCF via $HOME/MISC/mjlab_microduck;
-          # point it at the checked-out sibling here.
-          MJCF_DIR_OVERRIDE: ${{ github.workspace }}/mjlab_microduck/src/mjlab_microduck/robot/microduck
         run: |
           npm ci
-          # Patch the script to honour the env override for CI.
-          # (No-op if scripts/build_kinematics.py already supports it.)
           npm run build
 
       - name: Bundle dist + deploy

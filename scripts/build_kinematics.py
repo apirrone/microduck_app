@@ -18,18 +18,13 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 ROOT = Path(__file__).resolve().parent.parent
-# Sibling-checkout default; override with $MJCF_DIR_OVERRIDE for CI or
-# unusual layouts.
-_DEFAULT_MJCF_DIR = (
-    Path.home()
-    / "MISC"
-    / "mjlab_microduck"
-    / "src"
-    / "mjlab_microduck"
-    / "robot"
-    / "microduck"
-)
+# Vendored snapshot of the microduck MJCF + STLs. To refresh from
+# upstream:
+#   cp <mjlab_microduck>/.../robot/microduck/robot_walk.xml  robot_assets/microduck/
+#   cp <mjlab_microduck>/.../robot/microduck/assets/*.stl    robot_assets/microduck/assets/
+# Override with $MJCF_DIR_OVERRIDE for unusual layouts.
 import os
+_DEFAULT_MJCF_DIR = ROOT / "robot_assets" / "microduck"
 MJCF_DIR = Path(os.environ.get("MJCF_DIR_OVERRIDE", _DEFAULT_MJCF_DIR))
 MJCF_FILE = MJCF_DIR / "robot_walk.xml"
 ASSET_DIR = MJCF_DIR / "assets"
