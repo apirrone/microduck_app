@@ -38,6 +38,10 @@ export interface DuckSnapshot {
   mood?: Record<string, number>;
   /// Heavily-smoothed average motor-bus voltage in volts.
   battery_v?: number;
+  /// Hardware variant — picks which mesh bundle the 3D viewer loads.
+  /// Values: "v1", "v1.5". Missing on older runtimes; PWA falls back
+  /// to v1.5 (the current/default model).
+  robot_version?: string;
 }
 
 export interface RootState {

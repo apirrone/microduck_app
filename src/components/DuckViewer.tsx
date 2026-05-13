@@ -83,20 +83,53 @@ export function DuckViewer(props: Props) {
     controls.minPolarAngle = 0.15;
     controls.maxPolarAngle = Math.PI / 2 - 0.05;
 
-    try {
-      const k = await loadKinematics("/robot/kinematics.json");
-      rig = await buildRig(k, { toon: true });
-      nActuated = rig.actuated.length;
-      scene.add(rig.placer);
-    } catch (e) {
-      console.warn("kinematics load failed — placeholder", e);
-      const placeholder = new THREE.Mesh(
-        new THREE.SphereGeometry(0.12, 16, 12),
-        new THREE.MeshToonMaterial({ color: 0xffcd3a }),
-      );
-      placeholder.position.y = 0.12;
-      scene.add(placeholder);
+    // The rig we load depends on the runtime's reported `robot_version`.
+    // First telemetry frame seeds this; if it changes (e.g. user points
+    // PWA at a different robot), we hot-swap the rig.
+    let currentVersion: string | null = null;
+
+    async function loadRigFor(version: string) {
+      try {
+        const k = await loadKinematics(`/robot/${version}/kinematics.json`);
+        const next = await buildRig(k, { toon: true });
+        if (rig) {
+          scene.remove(rig.placer);
+          // Best-effort cleanup — three.js doesn't auto-dispose.
+          rig.placer.traverse((o) => {
+            const m = o as THREE.Mesh;
+            if (m.geometry) m.geometry.dispose();
+            const mat = (m.material as THREE.Material | THREE.Material[] | undefined);
+            if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
+            else if (mat) mat.dispose();
+          });
+        }
+        rig = next;
+        nActuated = rig.actuated.length;
+        scene.add(rig.placer);
+        currentVersion = version;
+      } catch (e) {
+        console.warn(`kinematics load failed for ${version} — placeholder`, e);
+        const placeholder = new THREE.Mesh(
+          new THREE.SphereGeometry(0.12, 16, 12),
+          new THREE.MeshToonMaterial({ color: 0xffcd3a }),
+        );
+        placeholder.position.y = 0.12;
+        scene.add(placeholder);
+      }
     }
+
+    // Initial load — use whatever the latest snapshot says, defaulting
+    // to v1.5 (the current model) when offline.
+    await loadRigFor(props.snapshot?.robot_version ?? "v1.5");
+
+    // Reactively hot-swap if the runtime later reports a different
+    // variant (e.g. user switches the Robot URL between robots).
+    createEffect(() => {
+      const v = props.snapshot?.robot_version;
+      if (v && v !== currentVersion) {
+        void loadRigFor(v);
+      }
+    });
 
     const ro = new ResizeObserver(() => {
       const W = mount.clientWidth, H = mount.clientHeight;
