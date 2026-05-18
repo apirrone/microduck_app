@@ -6,7 +6,6 @@ import {
   loadKinematics,
   setJointAngles,
   applySleepPose,
-  groundFeet,
   groundFullBody,
   placeWorld,
   type DuckRig,
@@ -207,11 +206,14 @@ export function DuckViewer(props: Props) {
             placeWorld(rig, props.snapshot.x, props.snapshot.y, props.snapshot.yaw_rad);
           }
         }
-        // When awake the feet are the lowest part of the body; when
-        // asleep the legs fold under the trunk so the feet are no longer
-        // the lowest geometry. Switch grounding strategies accordingly.
-        if (props.asleep) groundFullBody(rig);
-        else              groundFeet(rig);
+        // Ground using the whole-rig bounding box in both poses.  Awake:
+        // the feet are the lowest geometry → same result as the old
+        // `groundFeet` path.  Asleep: the legs fold under the trunk so
+        // the trunk-bottom takes over as the lowest point and the body
+        // sits naturally on the floor.  Single path also avoids state
+        // bleeding when v1.5's feet bodies don't match the "foot"/"foot_2"
+        // names that groundFeet looks for.
+        groundFullBody(rig);
 
         // Detected-object sprites (emoji).  Place hovering just above the
         // object's world position so the sprite doesn't clip into the
