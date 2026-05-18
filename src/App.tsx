@@ -44,29 +44,35 @@ export default function App() {
       </header>
 
       <main class="relative flex-1 px-3 pb-24 overflow-hidden">
-        <Show when={tab() === "duck"}>
-          <section class="h-full grid grid-rows-[1fr_auto] gap-3">
-            <div class="card relative overflow-hidden">
-              <DuckViewer asleep={asleep()} snapshot={snapshot()} />
-              <Show when={asleep()}>
-                <div class="absolute inset-x-0 bottom-3 text-center text-slate2-600 text-xs">
-                  💤 sleeping{pollErr() ? ` — ${pollErr()}` : ""}
-                </div>
-              </Show>
-            </div>
-            <BrainHUD snapshot={snapshot()} />
-          </section>
-        </Show>
-        <Show when={tab() === "map"}>
-          <div class="h-full card p-2 overflow-hidden">
-            <MapView />
+        {/* Panes stay mounted across tab switches — hiding with CSS instead
+            of <Show> avoids tearing down the DuckViewer's 3D scene (and
+            re-streaming meshes) every time the user flips tabs. */}
+        <section
+          class="h-full grid grid-rows-[1fr_auto] gap-3"
+          style={{ display: tab() === "duck" ? "grid" : "none" }}
+        >
+          <div class="card relative overflow-hidden">
+            <DuckViewer asleep={asleep()} snapshot={snapshot()} />
+            <Show when={asleep()}>
+              <div class="absolute inset-x-0 bottom-3 text-center text-slate2-600 text-xs">
+                💤 sleeping{pollErr() ? ` — ${pollErr()}` : ""}
+              </div>
+            </Show>
           </div>
-        </Show>
-        <Show when={tab() === "camera"}>
-          <div class="h-full card p-2 overflow-hidden">
-            <CameraView />
-          </div>
-        </Show>
+          <BrainHUD snapshot={snapshot()} />
+        </section>
+        <div
+          class="h-full card p-2 overflow-hidden"
+          style={{ display: tab() === "map" ? "block" : "none" }}
+        >
+          <MapView />
+        </div>
+        <div
+          class="h-full card p-2 overflow-hidden"
+          style={{ display: tab() === "camera" ? "block" : "none" }}
+        >
+          <CameraView />
+        </div>
       </main>
 
       <nav class="fixed inset-x-0 bottom-0 px-3 pb-[max(env(safe-area-inset-bottom),12px)] pt-3 bg-gradient-to-t from-cream-50 via-cream-50/85 to-transparent">
