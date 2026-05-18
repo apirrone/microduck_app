@@ -12,6 +12,16 @@ export interface MapMeta {
   cell_m: number;
 }
 
+/// One entry of the `objects` array — a single detected object reported
+/// by the runtime, in world frame (the same frame the duck is rendered
+/// in).  `class` picks the emoji shown in the 3D view.
+export interface DetectedObject {
+  class: string;
+  world_pos: [number, number, number];
+  score: number;
+  ts_s: number;
+}
+
 export interface DuckSnapshot {
   duck_id?: string;
   // Pose in world frame
@@ -42,6 +52,9 @@ export interface DuckSnapshot {
   /// Values: "v1", "v1.5". Missing on older runtimes; PWA falls back
   /// to v1.5 (the current/default model).
   robot_version?: string;
+  /// Detected objects in world frame.  Rendered as emoji sprites in the
+  /// 3D view; empty/missing means nothing in sight.
+  objects?: DetectedObject[];
 }
 
 export interface RootState {

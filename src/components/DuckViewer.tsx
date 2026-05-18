@@ -64,6 +64,35 @@ export function DuckViewer(props: Props) {
     fill.position.set(-1.2, 0.6, -1.2);
     scene.add(fill);
 
+    // Emoji sprite pool — one Sprite per detected-object class, reused
+    // across frames so we don't churn GPU textures. Sprites live in the
+    // scene root (not the rig), so we convert MJCF world coords to scene
+    // coords explicitly: (mx, my, mz) → (mx, mz, -my). Sprites face the
+    // camera automatically.
+    const spritePool = new Map<string, THREE.Sprite>();
+    const seenThisTick = new Set<string>();
+    const emojiFor = (cls: string): string => {
+      switch (cls) {
+        case "ball":   return "⚽";
+        case "apple":  return "🍎";
+        case "person": return "🧑";
+        case "cat":    return "🐱";
+        case "dog":    return "🐶";
+        default:       return "❓";
+      }
+    };
+    const getSprite = (cls: string): THREE.Sprite => {
+      const cached = spritePool.get(cls);
+      if (cached) return cached;
+      const tex = makeEmojiTexture(emojiFor(cls));
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: true });
+      const s = new THREE.Sprite(mat);
+      // 8 cm tall — visible without dwarfing the duck.
+      s.scale.set(0.08, 0.08, 0.08);
+      spritePool.set(cls, s);
+      return s;
+    };
+
     // Tiled floor — large plane with a procedurally-drawn checker so
     // motion is visible as the world moves under the duck.
     const floor = new THREE.Mesh(
@@ -181,6 +210,25 @@ export function DuckViewer(props: Props) {
         // sleep poses).
         groundFeet(rig);
 
+        // Detected-object sprites (emoji).  Place at world position; hide
+        // any sprite whose class wasn't reported this tick.  MJCF (mx, my,
+        // mz) → scene (mx, mz, -my) — same convention as placeWorld().
+        seenThisTick.clear();
+        const objs = props.snapshot?.objects;
+        if (objs && objs.length > 0) {
+          for (const o of objs) {
+            const sp = getSprite(o.class);
+            const [mx, my, mz] = o.world_pos;
+            sp.position.set(mx, mz, -my);
+            if (sp.parent !== scene) scene.add(sp);
+            sp.visible = true;
+            seenThisTick.add(o.class);
+          }
+        }
+        for (const [cls, sp] of spritePool) {
+          if (!seenThisTick.has(cls)) sp.visible = false;
+        }
+
         // Follow camera: lerp the orbit target horizontally toward the
         // duck's (now-grounded) position; preserve user's orbit offset.
         // Y is pinned — foot-grounding moves placer.y each frame as the
@@ -265,6 +313,25 @@ function makeFloorTexture(): THREE.Texture {
   // 160 tile repeats over the plane.
   t.repeat.set(160, 160);
   t.anisotropy = 4;
+  return t;
+}
+
+// Render an emoji onto a transparent canvas → CanvasTexture.  Sized for
+// readability at 8 cm world scale on a phone screen; cached per-class in
+// `spritePool` so each emoji is rasterised at most once per session.
+function makeEmojiTexture(emoji: string): THREE.Texture {
+  const N = 128;
+  const c = document.createElement("canvas");
+  c.width = c.height = N;
+  const g = c.getContext("2d")!;
+  g.clearRect(0, 0, N, N);
+  g.font = `${N * 0.85}px "Segoe UI Emoji","Apple Color Emoji",sans-serif`;
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.fillText(emoji, N / 2, N / 2);
+  const t = new THREE.CanvasTexture(c);
+  t.minFilter = THREE.LinearFilter;
+  t.magFilter = THREE.LinearFilter;
   return t;
 }
 
