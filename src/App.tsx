@@ -1,13 +1,14 @@
 import { Show, createSignal, onMount } from "solid-js";
-import { startPolling, startMapPolling, asleep, snapshot, pollErr } from "./state/connection";
+import { startPolling, startMapPolling, startCameraPolling, asleep, snapshot, pollErr } from "./state/connection";
 import { DuckViewer } from "./components/DuckViewer";
 import { MapView } from "./components/MapView";
+import { CameraView } from "./components/CameraView";
 import { SettingsSheet } from "./components/SettingsSheet";
 import { StatusPill } from "./components/StatusPill";
 import { BatteryPill } from "./components/BatteryPill";
 import { BrainHUD } from "./components/BrainHUD";
 
-type Tab = "duck" | "map";
+type Tab = "duck" | "map" | "camera";
 
 export default function App() {
   const [tab, setTab] = createSignal<Tab>("duck");
@@ -16,6 +17,7 @@ export default function App() {
   onMount(() => {
     startPolling();
     startMapPolling();
+    startCameraPolling();
   });
 
   return (
@@ -60,12 +62,18 @@ export default function App() {
             <MapView />
           </div>
         </Show>
+        <Show when={tab() === "camera"}>
+          <div class="h-full card p-2 overflow-hidden">
+            <CameraView />
+          </div>
+        </Show>
       </main>
 
       <nav class="fixed inset-x-0 bottom-0 px-3 pb-[max(env(safe-area-inset-bottom),12px)] pt-3 bg-gradient-to-t from-cream-50 via-cream-50/85 to-transparent">
         <div class="card mx-auto max-w-md flex p-1.5 gap-1">
           <TabButton active={tab() === "duck"} onClick={() => setTab("duck")} label="Duck" icon="duck" />
           <TabButton active={tab() === "map"} onClick={() => setTab("map")} label="Map" icon="map" />
+          <TabButton active={tab() === "camera"} onClick={() => setTab("camera")} label="Camera" icon="camera" />
         </div>
       </nav>
 
@@ -74,7 +82,7 @@ export default function App() {
   );
 }
 
-function TabButton(props: { active: boolean; onClick: () => void; label: string; icon: "duck" | "map" }) {
+function TabButton(props: { active: boolean; onClick: () => void; label: string; icon: "duck" | "map" | "camera" }) {
   return (
     <button
       onClick={props.onClick}
@@ -83,6 +91,7 @@ function TabButton(props: { active: boolean; onClick: () => void; label: string;
     >
       <Show when={props.icon === "duck"}>🦆</Show>
       <Show when={props.icon === "map"}>🗺️</Show>
+      <Show when={props.icon === "camera"}>📷</Show>
       {props.label}
     </button>
   );

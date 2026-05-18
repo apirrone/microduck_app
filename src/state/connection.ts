@@ -19,6 +19,8 @@ export { snapshot, lastSeenMs, pollErr };
 export const asleep = createMemo(() => now() - lastSeenMs() > STALE_MS);
 
 export const mapBlob = createSignal<Blob | null>(null);
+export const cameraBlob = createSignal<Blob | null>(null);
+export const [cameraAvailable, setCameraAvailable] = createSignal<boolean>(false);
 
 function defaultRobotUrl(): string {
   // Port 9876 is the real robot's default (microduck_runtime --web-port);
@@ -91,6 +93,40 @@ export function stopMapPolling() {
   if (mapTicker != null) {
     window.clearInterval(mapTicker);
     mapTicker = null;
+  }
+}
+
+async function fetchCamera(): Promise<{ blob: Blob | null; reachable: boolean }> {
+  try {
+    const r = await fetch(joinUrl(robotUrl(), "/camera.jpg"), {
+      cache: "no-store",
+      signal: AbortSignal.timeout(2000),
+    });
+    // 503 = endpoint exists but no frame yet (runtime running without --stream,
+    // or camera hasn't produced a frame yet). Reachable, but no image.
+    if (r.status === 503) return { blob: null, reachable: true };
+    if (!r.ok) return { blob: null, reachable: false };
+    return { blob: await r.blob(), reachable: true };
+  } catch {
+    return { blob: null, reachable: false };
+  }
+}
+
+let cameraTicker: number | null = null;
+export function startCameraPolling(periodMs = 150) {
+  if (cameraTicker != null) return;
+  const tick = async () => {
+    const { blob, reachable } = await fetchCamera();
+    setCameraAvailable(reachable && blob != null);
+    if (blob) cameraBlob[1](blob);
+  };
+  tick();
+  cameraTicker = window.setInterval(tick, periodMs);
+}
+export function stopCameraPolling() {
+  if (cameraTicker != null) {
+    window.clearInterval(cameraTicker);
+    cameraTicker = null;
   }
 }
 
