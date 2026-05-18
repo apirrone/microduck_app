@@ -213,16 +213,21 @@ export function DuckViewer(props: Props) {
         if (props.asleep) groundFullBody(rig);
         else              groundFeet(rig);
 
-        // Detected-object sprites (emoji).  Place at world position; hide
-        // any sprite whose class wasn't reported this tick.  MJCF (mx, my,
-        // mz) → scene (mx, mz, -my) — same convention as placeWorld().
+        // Detected-object sprites (emoji).  Place hovering just above the
+        // object's world position so the sprite doesn't clip into the
+        // floor (the ball's centroid is ~one ball-radius off the ground —
+        // a sprite centered there would have its bottom half buried).
+        // MJCF (mx, my, mz) → scene (mx, mz, -my), same convention as
+        // placeWorld(), then a small upward offset along scene-y (= MJCF
+        // up).
         seenThisTick.clear();
         const objs = props.snapshot?.objects;
         if (objs && objs.length > 0) {
           for (const o of objs) {
             const sp = getSprite(o.class);
             const [mx, my, mz] = o.world_pos;
-            sp.position.set(mx, mz, -my);
+            const yOff = sp.scale.y * 0.7;
+            sp.position.set(mx, mz + yOff, -my);
             if (sp.parent !== scene) scene.add(sp);
             sp.visible = true;
             seenThisTick.add(o.class);
@@ -328,7 +333,7 @@ function makeEmojiTexture(emoji: string): THREE.Texture {
   c.width = c.height = N;
   const g = c.getContext("2d")!;
   g.clearRect(0, 0, N, N);
-  g.font = `${N * 0.85}px "Segoe UI Emoji","Apple Color Emoji",sans-serif`;
+  g.font = `${N * 0.85}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","EmojiOne Color","Android Emoji",sans-serif`;
   g.textAlign = "center";
   g.textBaseline = "middle";
   g.fillText(emoji, N / 2, N / 2);
