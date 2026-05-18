@@ -44,12 +44,18 @@ export default function App() {
       </header>
 
       <main class="relative flex-1 px-3 pb-24 overflow-hidden">
-        {/* Panes stay mounted across tab switches — hiding with CSS instead
-            of <Show> avoids tearing down the DuckViewer's 3D scene (and
-            re-streaming meshes) every time the user flips tabs. */}
+        {/* All three panes stay mounted *and* keep their layout box (same
+            absolute size) across tab switches. We toggle visibility +
+            pointer-events instead of `display: none` because collapsing
+            the duck canvas to 0×0 on mobile browsers can drop the WebGL
+            context's GPU state, which makes meshes re-stream into view
+            when the tab becomes visible again. */}
         <section
-          class="h-full grid grid-rows-[1fr_auto] gap-3"
-          style={{ display: tab() === "duck" ? "grid" : "none" }}
+          class="absolute inset-x-3 top-0 bottom-24 grid grid-rows-[1fr_auto] gap-3"
+          style={{
+            visibility: tab() === "duck" ? "visible" : "hidden",
+            "pointer-events": tab() === "duck" ? "auto" : "none",
+          }}
         >
           <div class="card relative overflow-hidden">
             <DuckViewer asleep={asleep()} snapshot={snapshot()} />
@@ -62,14 +68,20 @@ export default function App() {
           <BrainHUD snapshot={snapshot()} />
         </section>
         <div
-          class="h-full card p-2 overflow-hidden"
-          style={{ display: tab() === "map" ? "block" : "none" }}
+          class="absolute inset-x-3 top-0 bottom-24 card p-2 overflow-hidden"
+          style={{
+            visibility: tab() === "map" ? "visible" : "hidden",
+            "pointer-events": tab() === "map" ? "auto" : "none",
+          }}
         >
           <MapView />
         </div>
         <div
-          class="h-full card p-2 overflow-hidden"
-          style={{ display: tab() === "camera" ? "block" : "none" }}
+          class="absolute inset-x-3 top-0 bottom-24 card p-2 overflow-hidden"
+          style={{
+            visibility: tab() === "camera" ? "visible" : "hidden",
+            "pointer-events": tab() === "camera" ? "auto" : "none",
+          }}
         >
           <CameraView />
         </div>
