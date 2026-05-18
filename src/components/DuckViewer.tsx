@@ -7,6 +7,7 @@ import {
   setJointAngles,
   applySleepPose,
   groundFeet,
+  groundFullBody,
   placeWorld,
   type DuckRig,
 } from "../duck/kinematics";
@@ -206,9 +207,11 @@ export function DuckViewer(props: Props) {
             placeWorld(rig, props.snapshot.x, props.snapshot.y, props.snapshot.yaw_rad);
           }
         }
-        // Foot-grounding runs every frame (works for both walking and
-        // sleep poses).
-        groundFeet(rig);
+        // When awake the feet are the lowest part of the body; when
+        // asleep the legs fold under the trunk so the feet are no longer
+        // the lowest geometry. Switch grounding strategies accordingly.
+        if (props.asleep) groundFullBody(rig);
+        else              groundFeet(rig);
 
         // Detected-object sprites (emoji).  Place at world position; hide
         // any sprite whose class wasn't reported this tick.  MJCF (mx, my,

@@ -193,6 +193,20 @@ export function groundFeet(rig: DuckRig, floorY = 0): number {
   return floorY - minY;
 }
 
+/// Ground using the whole rig's bounding box rather than just the feet.
+/// Use this when the feet are no longer the lowest part of the body (e.g.
+/// sleep / sitting poses where the legs fold under the trunk) — `groundFeet`
+/// would otherwise lift the body until the folded-up feet touched the floor
+/// and leave the trunk hovering.
+export function groundFullBody(rig: DuckRig, floorY = 0): number {
+  rig.placer.updateWorldMatrix(true, true);
+  _box.setFromObject(rig.placer);
+  const minY = _box.min.y;
+  if (!Number.isFinite(minY)) return 0;
+  rig.placer.position.y += floorY - minY;
+  return floorY - minY;
+}
+
 // Place the duck in MJCF world coords (x, y in metres, yaw in radians)
 // and yaw it. Z-axis grounding is left to groundFeet().
 export function placeWorld(rig: DuckRig, x: number, y: number, yaw: number) {
