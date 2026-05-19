@@ -72,9 +72,11 @@ export function DuckViewer(props: Props) {
     const spritePool = new Map<string, THREE.Sprite>();
     const seenThisTick = new Set<string>();
 
-    // Debug arrow for the head camera. Cyan arrow at cam_world_pos pointing
-    // along cam_world_fwd. Lets us eyeball whether the FK orientation
-    // matches reality without staring at log lines.
+    // Debug arrow for the head camera. Cyan arrow at the camera in
+    // trunk frame, pointing along the optical axis. Attached as a child
+    // of `rig.root` (assigned once the rig finishes loading), so it
+    // inherits the duck's placement + yaw and uses MJCF (trunk) coords
+    // directly — sidesteps any odo/IMU vs PWA-grounding mismatch.
     const camArrow = new THREE.ArrowHelper(
       new THREE.Vector3(1, 0, 0),
       new THREE.Vector3(0, 0, 0),
@@ -83,7 +85,6 @@ export function DuckViewer(props: Props) {
       0.05, 0.03,      // head length / head width
     );
     camArrow.visible = false;
-    scene.add(camArrow);
     const emojiFor = (cls: string): string => {
       switch (cls) {
         case "ball":   return "⚽";
@@ -148,6 +149,11 @@ export function DuckViewer(props: Props) {
         rig = next;
         nActuated = rig.actuated.length;
         scene.add(rig.placer);
+        // Attach the camera-debug arrow to the trunk_base body so trunk-
+        // frame coords map 1:1 (the body's local axes already follow MJCF
+        // convention, and groundFullBody's placer offset is inherited).
+        const trunkBody = rig.bodies.get("trunk_base");
+        if (trunkBody) trunkBody.add(camArrow);
         currentVersion = version;
       } catch (e) {
         console.warn(`kinematics load failed for ${version} — placeholder`, e);
@@ -228,37 +234,34 @@ export function DuckViewer(props: Props) {
         // names that groundFeet looks for.
         groundFullBody(rig);
 
-        // Camera debug arrow. MJCF (mx, my, mz) → scene (mx, mz, -my).
+        // Camera debug arrow.  Trunk-frame coords; arrow is a child of
+        // rig.root which already applies MJCF Z-up → scene Y-up, so we
+        // pass MJCF coords as-is.
         const snap = props.snapshot;
-        if (snap?.cam_valid && snap.cam_world_pos && snap.cam_world_fwd) {
-          const [px, py, pz] = snap.cam_world_pos;
-          const [fx, fy, fz] = snap.cam_world_fwd;
-          camArrow.position.set(px, pz, -py);
-          // Direction in MJCF → scene. Vector axes transform the same as
-          // positions for our (mx, mz, -my) convention.
-          const dir = new THREE.Vector3(fx, fz, -fy).normalize();
-          camArrow.setDirection(dir);
+        if (snap?.cam_valid && snap.cam_trunk_pos && snap.cam_trunk_fwd) {
+          camArrow.position.set(...snap.cam_trunk_pos);
+          camArrow.setDirection(new THREE.Vector3(...snap.cam_trunk_fwd).normalize());
           camArrow.visible = true;
         } else {
           camArrow.visible = false;
         }
 
-        // Detected-object sprites (emoji).  Place hovering just above the
-        // object's world position so the sprite doesn't clip into the
-        // floor (the ball's centroid is ~one ball-radius off the ground —
-        // a sprite centered there would have its bottom half buried).
-        // MJCF (mx, my, mz) → scene (mx, mz, -my), same convention as
-        // placeWorld(), then a small upward offset along scene-y (= MJCF
-        // up).
+        // Detected-object sprites (emoji).  Attach to trunk_base body
+        // and use trunk-frame coords directly — the body's transform
+        // (root rotation + placer offset) places the sprite at the right
+        // scene location with no frame mismatch.  Small upward offset
+        // keeps the sprite from clipping through the floor.
         seenThisTick.clear();
+        const trunkBody = rig.bodies.get("trunk_base");
         const objs = props.snapshot?.objects;
-        if (objs && objs.length > 0) {
+        if (trunkBody && objs && objs.length > 0) {
           for (const o of objs) {
             const sp = getSprite(o.class);
-            const [mx, my, mz] = o.world_pos;
+            const p = o.trunk_pos ?? o.world_pos;  // fall back for old runtimes
+            const [mx, my, mz] = p;
             const yOff = sp.scale.y * 0.7;
-            sp.position.set(mx, mz + yOff, -my);
-            if (sp.parent !== scene) scene.add(sp);
+            sp.position.set(mx, my, mz + yOff);
+            if (sp.parent !== trunkBody) trunkBody.add(sp);
             sp.visible = true;
             seenThisTick.add(o.class);
           }

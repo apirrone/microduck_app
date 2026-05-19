@@ -18,6 +18,10 @@ export interface MapMeta {
 export interface DetectedObject {
   class: string;
   world_pos: [number, number, number];
+  /// Same point in trunk_base body frame.  PWA renders from this so the
+  /// sprite sits where the geometry actually is, not where the odometry
+  /// says (those frames disagree by a few cm under groundFullBody).
+  trunk_pos?: [number, number, number];
   score: number;
   ts_s: number;
 }
@@ -60,6 +64,8 @@ export interface DuckSnapshot {
   /// the runtime hasn't computed it (sim) or `cam_valid` is false.
   cam_world_pos?: [number, number, number];
   cam_world_fwd?: [number, number, number];
+  cam_trunk_pos?: [number, number, number];
+  cam_trunk_fwd?: [number, number, number];
   cam_valid?: boolean;
 }
 
