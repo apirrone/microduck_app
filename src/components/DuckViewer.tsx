@@ -234,11 +234,16 @@ export function DuckViewer(props: Props) {
         else              groundFeet(rig);
 
         // Camera debug arrow.  Trunk-frame coords; arrow is a child of
-        // rig.root which already applies MJCF Z-up → scene Y-up, so we
-        // pass MJCF coords as-is.
+        // trunk_base so MJCF Z-up → scene Y-up is automatic and the
+        // arrow inherits the duck's yaw.  We subtract the placer's
+        // grounding offset from the MJCF-z component so the arrow sits
+        // at the visible camera location (rather than at MJCF-floor +
+        // offset, which would be a few cm above the visible head).
         const snap = props.snapshot;
+        const groundOffset = rig.placer.position.y;
         if (snap?.cam_valid && snap.cam_trunk_pos && snap.cam_trunk_fwd) {
-          camArrow.position.set(...snap.cam_trunk_pos);
+          const [px, py, pz] = snap.cam_trunk_pos;
+          camArrow.position.set(px, py, pz - groundOffset);
           camArrow.setDirection(new THREE.Vector3(...snap.cam_trunk_fwd).normalize());
           camArrow.visible = true;
         } else {
@@ -256,10 +261,13 @@ export function DuckViewer(props: Props) {
         if (trunkBody && objs && objs.length > 0) {
           for (const o of objs) {
             const sp = getSprite(o.class);
-            const p = o.trunk_pos ?? o.world_pos;  // fall back for old runtimes
+            const p = o.trunk_pos ?? o.world_pos;
             const [mx, my, mz] = p;
             const yOff = sp.scale.y * 0.7;
-            sp.position.set(mx, my, mz + yOff);
+            // Subtract the placer's grounding offset (foot mesh extends a
+            // few cm below the foot body origin in MJCF) so the sprite
+            // sits at the visible floor + ball radius, not above it.
+            sp.position.set(mx, my, mz - groundOffset + yOff);
             if (sp.parent !== trunkBody) trunkBody.add(sp);
             sp.visible = true;
             seenThisTick.add(o.class);

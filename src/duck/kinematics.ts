@@ -192,19 +192,11 @@ export async function buildRig(k: Kinematics, opts: BuildOpts = {}): Promise<Duc
 const _box = new THREE.Box3();
 export function groundFeet(rig: DuckRig, floorY = 0): number {
   if (rig.feet.length === 0) return 0;
-  // Use the foot BODY origin (not the mesh bbox) as the floor contact
-  // point.  Why: in MJCF the foot body sits at z=0 (the physical floor),
-  // but its visual mesh extends a few cm below the body origin for
-  // styling.  Using the bbox would put the mesh bottom at y=0 and the
-  // trunk a few cm higher than MJCF says — that mismatches the runtime's
-  // world frame (where z=0 is the foot body) and makes things published
-  // in MJCF coords (the ball) hover a few cm above the visible floor.
-  const tmp = new THREE.Vector3();
   let minY = Infinity;
   for (const f of rig.feet) {
     f.updateWorldMatrix(true, true);
-    f.getWorldPosition(tmp);
-    if (tmp.y < minY) minY = tmp.y;
+    _box.setFromObject(f);
+    if (_box.min.y < minY) minY = _box.min.y;
   }
   if (!Number.isFinite(minY)) return 0;
   rig.placer.position.y += floorY - minY;
