@@ -163,12 +163,24 @@ export async function buildRig(k: Kinematics, opts: BuildOpts = {}): Promise<Duc
     }
   }
 
-  // Identify foot bodies for ground contact resolution. The MJCF names
-  // them `foot` (left) and `foot_2` (right).
+  // Identify foot bodies for ground contact resolution. Names differ
+  // per variant: v1 uses `foot`/`foot_2`; v1.5's left foot body is the
+  // odd-named `seeed_bearing__configuration_default` (the visual mesh
+  // is `left_foot` attached to it) and the right foot is `right_foot_2`.
+  // If none match, fall back to any body whose name includes "foot".
+  const FOOT_NAMES = [
+    "foot", "foot_2",
+    "seeed_bearing__configuration_default", "right_foot_2",
+  ];
   const feet: THREE.Object3D[] = [];
-  for (const name of ["foot", "foot_2"]) {
+  for (const name of FOOT_NAMES) {
     const g = bodies.get(name);
     if (g) feet.push(g);
+  }
+  if (feet.length === 0) {
+    for (const [name, g] of bodies) {
+      if (name.toLowerCase().includes("foot")) feet.push(g);
+    }
   }
 
   return { placer, root, bodies, joints, actuated: k.actuated_joints, bodyIdByName, feet };
@@ -180,15 +192,21 @@ export async function buildRig(k: Kinematics, opts: BuildOpts = {}): Promise<Duc
 const _box = new THREE.Box3();
 export function groundFeet(rig: DuckRig, floorY = 0): number {
   if (rig.feet.length === 0) return 0;
+  // Use the foot BODY origin (not the mesh bbox) as the floor contact
+  // point.  Why: in MJCF the foot body sits at z=0 (the physical floor),
+  // but its visual mesh extends a few cm below the body origin for
+  // styling.  Using the bbox would put the mesh bottom at y=0 and the
+  // trunk a few cm higher than MJCF says — that mismatches the runtime's
+  // world frame (where z=0 is the foot body) and makes things published
+  // in MJCF coords (the ball) hover a few cm above the visible floor.
+  const tmp = new THREE.Vector3();
   let minY = Infinity;
   for (const f of rig.feet) {
     f.updateWorldMatrix(true, true);
-    _box.setFromObject(f);
-    if (_box.min.y < minY) minY = _box.min.y;
+    f.getWorldPosition(tmp);
+    if (tmp.y < minY) minY = tmp.y;
   }
   if (!Number.isFinite(minY)) return 0;
-  // Apply on placer.position.y so the result is visible to subsequent
-  // world-space queries.
   rig.placer.position.y += floorY - minY;
   return floorY - minY;
 }
