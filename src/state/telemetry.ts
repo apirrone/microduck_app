@@ -55,6 +55,12 @@ export interface DuckSnapshot {
   /// Detected objects in world frame.  Rendered as emoji sprites in the
   /// 3D view; empty/missing means nothing in sight.
   objects?: DetectedObject[];
+  /// Head-camera pose in world frame (MJCF +Z up).  Rendered in the 3D
+  /// view as a small arrow for debugging projection / FK.  Missing when
+  /// the runtime hasn't computed it (sim) or `cam_valid` is false.
+  cam_world_pos?: [number, number, number];
+  cam_world_fwd?: [number, number, number];
+  cam_valid?: boolean;
 }
 
 export interface RootState {

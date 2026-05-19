@@ -71,6 +71,19 @@ export function DuckViewer(props: Props) {
     // camera automatically.
     const spritePool = new Map<string, THREE.Sprite>();
     const seenThisTick = new Set<string>();
+
+    // Debug arrow for the head camera. Cyan arrow at cam_world_pos pointing
+    // along cam_world_fwd. Lets us eyeball whether the FK orientation
+    // matches reality without staring at log lines.
+    const camArrow = new THREE.ArrowHelper(
+      new THREE.Vector3(1, 0, 0),
+      new THREE.Vector3(0, 0, 0),
+      0.30,            // 30 cm shaft — comfortably longer than the duck
+      0x00d1c1,        // cyan, contrasts with the cream background
+      0.05, 0.03,      // head length / head width
+    );
+    camArrow.visible = false;
+    scene.add(camArrow);
     const emojiFor = (cls: string): string => {
       switch (cls) {
         case "ball":   return "⚽";
@@ -214,6 +227,21 @@ export function DuckViewer(props: Props) {
         // bleeding when v1.5's feet bodies don't match the "foot"/"foot_2"
         // names that groundFeet looks for.
         groundFullBody(rig);
+
+        // Camera debug arrow. MJCF (mx, my, mz) → scene (mx, mz, -my).
+        const snap = props.snapshot;
+        if (snap?.cam_valid && snap.cam_world_pos && snap.cam_world_fwd) {
+          const [px, py, pz] = snap.cam_world_pos;
+          const [fx, fy, fz] = snap.cam_world_fwd;
+          camArrow.position.set(px, pz, -py);
+          // Direction in MJCF → scene. Vector axes transform the same as
+          // positions for our (mx, mz, -my) convention.
+          const dir = new THREE.Vector3(fx, fz, -fy).normalize();
+          camArrow.setDirection(dir);
+          camArrow.visible = true;
+        } else {
+          camArrow.visible = false;
+        }
 
         // Detected-object sprites (emoji).  Place hovering just above the
         // object's world position so the sprite doesn't clip into the
