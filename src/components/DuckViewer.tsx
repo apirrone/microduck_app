@@ -263,11 +263,12 @@ export function DuckViewer(props: Props) {
             const sp = getSprite(o.class);
             const p = o.trunk_pos ?? o.world_pos;
             const [mx, my, mz] = p;
-            const yOff = sp.scale.y * 0.7;
-            // Subtract the placer's grounding offset (foot mesh extends a
-            // few cm below the foot body origin in MJCF) so the sprite
-            // sits at the visible floor + ball radius, not above it.
-            sp.position.set(mx, my, mz - groundOffset + yOff);
+            // Sprite center = ball center.  Subtract groundOffset so the
+            // sprite tracks the *visible* floor (the runtime's MJCF "floor"
+            // is at scene y = groundOffset due to foot-mesh extension).
+            // No extra y-offset — the sprite's lower half clips slightly
+            // into the floor for a ball-on-ground look.
+            sp.position.set(mx, my, mz - groundOffset);
             if (sp.parent !== trunkBody) trunkBody.add(sp);
             sp.visible = true;
             seenThisTick.add(o.class);
