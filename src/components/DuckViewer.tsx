@@ -86,6 +86,37 @@ export function DuckViewer(props: Props) {
       0.05, 0.03,      // head length / head width
     );
     camArrow.visible = false;
+
+    // ── ToF point cloud (debug) ─────────────────────────────────
+    // Live world-frame beam endpoints from the runtime's head-mounted
+    // ToF (`/state.json :: tof_rays_3d`). Lives in scene root using the
+    // same MJCF→scene axis swap as placeWorld: (mx, my, mz) → (mx, mz, -my).
+    // Capacity = 64 (the VL53L5CX 8×8 grid). Each frame we update the
+    // attribute and bump drawRange. Visible only when the runtime is
+    // pushing rays (i.e. `--head-tof` enabled + scans flowing).
+    const MAX_TOF_POINTS = 64;
+    const tofPositions = new Float32Array(MAX_TOF_POINTS * 3);
+    const tofGeo = new THREE.BufferGeometry();
+    tofGeo.setAttribute("position", new THREE.BufferAttribute(tofPositions, 3));
+    tofGeo.setDrawRange(0, 0);
+    const tofMat = new THREE.PointsMaterial({
+      color: 0xffd23f,           // warm yellow, contrasts with cream floor
+      size: 0.04,                // 4 cm — readable at normal orbit distance
+      sizeAttenuation: true,
+      depthTest: true,
+    });
+    const tofPoints = new THREE.Points(tofGeo, tofMat);
+    scene.add(tofPoints);
+
+    // Sensor origin marker: small emerald sphere at the ToF sensor in
+    // world frame. Shows where the rays emanate from — particularly
+    // useful when head-yawing during a stop-and-pan scan.
+    const tofSensor = new THREE.Mesh(
+      new THREE.SphereGeometry(0.015, 12, 10),
+      new THREE.MeshBasicMaterial({ color: 0x33ff88 }),
+    );
+    tofSensor.visible = false;
+    scene.add(tofSensor);
     const emojiFor = (cls: string): string => {
       switch (cls) {
         case "ball":   return "⚽";
@@ -248,6 +279,35 @@ export function DuckViewer(props: Props) {
           camArrow.visible = true;
         } else {
           camArrow.visible = false;
+        }
+
+        // ToF point cloud — world-frame XYZ from `/state.json`,
+        // converted MJCF → scene as in placeWorld (mx, my, mz) → (mx, mz, -my).
+        // We subtract `groundOffset` from the y component for the same
+        // reason the cam-arrow does: scene's visible floor sits at
+        // `groundOffset`, not at y=0.
+        const rays = snap?.tof_rays_3d;
+        if (rays && rays.length > 0) {
+          const n = Math.min(rays.length, MAX_TOF_POINTS);
+          for (let i = 0; i < n; i++) {
+            const [mx, my, mz] = rays[i];
+            tofPositions[i * 3 + 0] = mx;
+            tofPositions[i * 3 + 1] = mz - groundOffset;
+            tofPositions[i * 3 + 2] = -my;
+          }
+          tofGeo.attributes.position.needsUpdate = true;
+          tofGeo.setDrawRange(0, n);
+          tofPoints.visible = true;
+        } else {
+          tofGeo.setDrawRange(0, 0);
+          tofPoints.visible = false;
+        }
+        const so = snap?.tof_sensor_3d;
+        if (so) {
+          tofSensor.position.set(so[0], so[2] - groundOffset, -so[1]);
+          tofSensor.visible = true;
+        } else {
+          tofSensor.visible = false;
         }
 
         // Detected-object sprites (emoji).  Attach to trunk_base body

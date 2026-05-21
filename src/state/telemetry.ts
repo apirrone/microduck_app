@@ -67,6 +67,20 @@ export interface DuckSnapshot {
   cam_trunk_pos?: [number, number, number];
   cam_trunk_fwd?: [number, number, number];
   cam_valid?: boolean;
+  /// Live ToF point cloud (3D, world frame). Each entry is one beam's
+  /// world-frame endpoint, computed from the current head pose and
+  /// sensor pose at capture time. Empty when no scan has arrived or
+  /// `--head-tof` isn't enabled.
+  tof_rays_3d?: [number, number, number][];
+  /// 3D world position of the ToF sensor origin at capture time —
+  /// paired with `tof_rays_3d`. Use as the anchor for an
+  /// `ArrowHelper` showing the sensor.
+  tof_sensor_3d?: [number, number, number];
+  /// 2D projections (XY only, horizontal plane). Kept around for the
+  /// flat map overlay; same data as `tof_rays_3d` collapsed to the
+  /// XY plane on the runtime side.
+  tof_rays?: [number, number][];
+  tof_sensor?: [number, number];
 }
 
 export interface RootState {
