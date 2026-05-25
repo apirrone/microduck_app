@@ -86,6 +86,37 @@ export function DuckViewer(props: Props) {
       0.05, 0.03,      // head length / head width
     );
     camArrow.visible = false;
+
+    // ── ToF point cloud (debug) ─────────────────────────────────
+    // Live world-frame beam endpoints from the runtime's head-mounted
+    // ToF (`/state.json :: tof_rays_3d`). Lives in scene root using the
+    // same MJCF→scene axis swap as placeWorld: (mx, my, mz) → (mx, mz, -my).
+    // Capacity = 64 (the VL53L5CX 8×8 grid). Each frame we update the
+    // attribute and bump drawRange. Visible only when the runtime is
+    // pushing rays (i.e. `--head-tof` enabled + scans flowing).
+    const MAX_TOF_POINTS = 64;
+    const tofPositions = new Float32Array(MAX_TOF_POINTS * 3);
+    const tofGeo = new THREE.BufferGeometry();
+    tofGeo.setAttribute("position", new THREE.BufferAttribute(tofPositions, 3));
+    tofGeo.setDrawRange(0, 0);
+    const tofMat = new THREE.PointsMaterial({
+      color: 0xffd23f,           // warm yellow, contrasts with cream floor
+      size: 0.04,                // 4 cm — readable at normal orbit distance
+      sizeAttenuation: true,
+      depthTest: true,
+    });
+    const tofPoints = new THREE.Points(tofGeo, tofMat);
+    scene.add(tofPoints);
+
+    // Sensor origin marker: small emerald sphere at the ToF sensor in
+    // world frame. Shows where the rays emanate from — particularly
+    // useful when head-yawing during a stop-and-pan scan.
+    const tofSensor = new THREE.Mesh(
+      new THREE.SphereGeometry(0.015, 12, 10),
+      new THREE.MeshBasicMaterial({ color: 0x33ff88 }),
+    );
+    tofSensor.visible = false;
+    scene.add(tofSensor);
     const emojiFor = (cls: string): string => {
       switch (cls) {
         case "ball":   return "⚽";
@@ -272,6 +303,35 @@ export function DuckViewer(props: Props) {
           camArrow.visible = false;
         }
 
+        // ToF point cloud — world-frame XYZ from `/state.json`,
+        // converted MJCF → scene as in placeWorld (mx, my, mz) → (mx, mz, -my).
+        // We subtract `groundOffset` from the y component for the same
+        // reason the cam-arrow does: scene's visible floor sits at
+        // `groundOffset`, not at y=0.
+        const rays = snap?.tof_rays_3d;
+        if (rays && rays.length > 0) {
+          const n = Math.min(rays.length, MAX_TOF_POINTS);
+          for (let i = 0; i < n; i++) {
+            const [mx, my, mz] = rays[i];
+            tofPositions[i * 3 + 0] = mx;
+            tofPositions[i * 3 + 1] = mz - groundOffset;
+            tofPositions[i * 3 + 2] = -my;
+          }
+          tofGeo.attributes.position.needsUpdate = true;
+          tofGeo.setDrawRange(0, n);
+          tofPoints.visible = true;
+        } else {
+          tofGeo.setDrawRange(0, 0);
+          tofPoints.visible = false;
+        }
+        const so = snap?.tof_sensor_3d;
+        if (so) {
+          tofSensor.position.set(so[0], so[2] - groundOffset, -so[1]);
+          tofSensor.visible = true;
+        } else {
+          tofSensor.visible = false;
+        }
+
         // Detected-object markers (emoji sprites for most classes; a
         // flat red disc for "laser"). Attach to trunk_base body and use
         // trunk-frame coords directly — the body's transform (root
@@ -285,16 +345,14 @@ export function DuckViewer(props: Props) {
             const sp = getMarker(o.class);
             const p = o.trunk_pos ?? o.world_pos;
             const [mx, my, mz] = p;
-            // Laser disc lies flat on the floor — no Y lift (the runtime
-            // already projects to z = -TRUNK_TO_FLOOR). A tiny epsilon
-            // keeps it from z-fighting with the floor plane.
-            // Sprite billboard: lift by ~70% of its size so its centre
-            // sits above the floor instead of clipping through it.
-            // Laser disc: tiny epsilon to avoid z-fighting with the floor.
-            const yOff = o.class === "laser" ? 0.001 : sp.scale.y * 0.7;
-            // Subtract the placer's grounding offset so the marker sits
-            // at the visible floor (the foot mesh extends a few cm below
-            // the foot body origin in MJCF).
+            // Sprite center = marker centre. Subtract groundOffset so the
+            // sprite tracks the *visible* floor (the runtime's MJCF
+            // "floor" is at scene y = groundOffset due to foot-mesh
+            // extension). The laser disc lies flat with a tiny epsilon
+            // above the floor to avoid z-fighting; emoji sprites get no
+            // extra lift, so their lower half clips slightly into the
+            // floor for a ball-on-ground look.
+            const yOff = o.class === "laser" ? 0.001 : 0;
             sp.position.set(mx, my, mz - groundOffset + yOff);
             if (sp.parent !== trunkBody) trunkBody.add(sp);
             sp.visible = true;
