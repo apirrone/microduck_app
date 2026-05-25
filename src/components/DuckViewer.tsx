@@ -65,12 +65,12 @@ export function DuckViewer(props: Props) {
     fill.position.set(-1.2, 0.6, -1.2);
     scene.add(fill);
 
-    // Emoji sprite pool — one Sprite per detected-object class, reused
-    // across frames so we don't churn GPU textures. Sprites live in the
-    // scene root (not the rig), so we convert MJCF world coords to scene
-    // coords explicitly: (mx, my, mz) → (mx, mz, -my). Sprites face the
-    // camera automatically.
-    const spritePool = new Map<string, THREE.Sprite>();
+    // Per-class detected-object marker pool. Most classes render as a
+    // billboard emoji sprite; "laser" is special-cased as a flat red disc
+    // that lies on the floor (closer to the visual of a real laser dot).
+    // Each Object3D is created lazily, cached, and reused across frames
+    // so we don't churn GPU resources.
+    const markerPool = new Map<string, THREE.Object3D>();
     const seenThisTick = new Set<string>();
 
     // Debug arrow for the head camera. Cyan arrow at the camera in
@@ -96,16 +96,38 @@ export function DuckViewer(props: Props) {
         default:       return "❓";
       }
     };
-    const getSprite = (cls: string): THREE.Sprite => {
-      const cached = spritePool.get(cls);
-      if (cached) return cached;
+    // Build the marker for a class. "laser" gets a flat red disc that
+    // lies on the floor; everything else gets a billboard emoji.
+    const makeMarker = (cls: string): THREE.Object3D => {
+      if (cls === "laser") {
+        // 2 cm radius disc. trunk_base's local frame follows MJCF
+        // convention (Z-up), so CircleGeometry's default XY-plane
+        // orientation already lies flat on the floor — no rotation
+        // needed. Bright red with no lighting dependence so the dot
+        // stays visible regardless of the scene lights, and DoubleSide
+        // so orbiting below doesn't hide it.
+        const geom = new THREE.CircleGeometry(0.02, 24);
+        const mat = new THREE.MeshBasicMaterial({
+          color: 0xff1a1a,
+          transparent: true,
+          opacity: 0.95,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        });
+        return new THREE.Mesh(geom, mat);
+      }
       const tex = makeEmojiTexture(emojiFor(cls));
-      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: true });
-      const s = new THREE.Sprite(mat);
-      // 8 cm tall — visible without dwarfing the duck.
+      const matSp = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: true });
+      const s = new THREE.Sprite(matSp);
       s.scale.set(0.08, 0.08, 0.08);
-      spritePool.set(cls, s);
       return s;
+    };
+    const getMarker = (cls: string): THREE.Object3D => {
+      const cached = markerPool.get(cls);
+      if (cached) return cached;
+      const m = makeMarker(cls);
+      markerPool.set(cls, m);
+      return m;
     };
 
     // Tiled floor — large plane with a procedurally-drawn checker so
@@ -250,30 +272,36 @@ export function DuckViewer(props: Props) {
           camArrow.visible = false;
         }
 
-        // Detected-object sprites (emoji).  Attach to trunk_base body
-        // and use trunk-frame coords directly — the body's transform
-        // (root rotation + placer offset) places the sprite at the right
-        // scene location with no frame mismatch.  Small upward offset
-        // keeps the sprite from clipping through the floor.
+        // Detected-object markers (emoji sprites for most classes; a
+        // flat red disc for "laser"). Attach to trunk_base body and use
+        // trunk-frame coords directly — the body's transform (root
+        // rotation + placer offset) places the marker at the right scene
+        // location with no frame mismatch.
         seenThisTick.clear();
         const trunkBody = rig.bodies.get("trunk_base");
         const objs = props.snapshot?.objects;
         if (trunkBody && objs && objs.length > 0) {
           for (const o of objs) {
-            const sp = getSprite(o.class);
+            const sp = getMarker(o.class);
             const p = o.trunk_pos ?? o.world_pos;
             const [mx, my, mz] = p;
-            const yOff = sp.scale.y * 0.7;
-            // Subtract the placer's grounding offset (foot mesh extends a
-            // few cm below the foot body origin in MJCF) so the sprite
-            // sits at the visible floor + ball radius, not above it.
+            // Laser disc lies flat on the floor — no Y lift (the runtime
+            // already projects to z = -TRUNK_TO_FLOOR). A tiny epsilon
+            // keeps it from z-fighting with the floor plane.
+            // Sprite billboard: lift by ~70% of its size so its centre
+            // sits above the floor instead of clipping through it.
+            // Laser disc: tiny epsilon to avoid z-fighting with the floor.
+            const yOff = o.class === "laser" ? 0.001 : sp.scale.y * 0.7;
+            // Subtract the placer's grounding offset so the marker sits
+            // at the visible floor (the foot mesh extends a few cm below
+            // the foot body origin in MJCF).
             sp.position.set(mx, my, mz - groundOffset + yOff);
             if (sp.parent !== trunkBody) trunkBody.add(sp);
             sp.visible = true;
             seenThisTick.add(o.class);
           }
         }
-        for (const [cls, sp] of spritePool) {
+        for (const [cls, sp] of markerPool) {
           if (!seenThisTick.has(cls)) sp.visible = false;
         }
 
