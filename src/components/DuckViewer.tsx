@@ -131,13 +131,12 @@ export function DuckViewer(props: Props) {
     // lies on the floor; everything else gets a billboard emoji.
     const makeMarker = (cls: string): THREE.Object3D => {
       if (cls === "laser") {
-        // 2 cm radius disc. trunk_base's local frame follows MJCF
+        // 1 cm radius disc. trunk_base's local frame follows MJCF
         // convention (Z-up), so CircleGeometry's default XY-plane
         // orientation already lies flat on the floor — no rotation
-        // needed. Bright red with no lighting dependence so the dot
-        // stays visible regardless of the scene lights, and DoubleSide
-        // so orbiting below doesn't hide it.
-        const geom = new THREE.CircleGeometry(0.02, 24);
+        // needed. Bright red, unlit so it stays visible regardless of
+        // scene lighting, DoubleSide so orbiting below doesn't hide it.
+        const geom = new THREE.CircleGeometry(0.01, 24);
         const mat = new THREE.MeshBasicMaterial({
           color: 0xff1a1a,
           transparent: true,
@@ -345,13 +344,13 @@ export function DuckViewer(props: Props) {
             const sp = getMarker(o.class);
             const p = o.trunk_pos ?? o.world_pos;
             const [mx, my, mz] = p;
-            // Sprite center = marker centre. Subtract groundOffset so the
-            // sprite tracks the *visible* floor (the runtime's MJCF
+            // Sprite center = marker centre. Subtract groundOffset so
+            // the marker tracks the *visible* floor (the runtime's MJCF
             // "floor" is at scene y = groundOffset due to foot-mesh
-            // extension). The laser disc lies flat with a tiny epsilon
-            // above the floor to avoid z-fighting; emoji sprites get no
-            // extra lift, so their lower half clips slightly into the
-            // floor for a ball-on-ground look.
+            // extension). Laser disc gets a tiny epsilon above the
+            // floor to avoid z-fighting; emoji sprites get no extra
+            // lift, so their lower half clips slightly into the floor
+            // for a ball-on-ground look.
             const yOff = o.class === "laser" ? 0.001 : 0;
             sp.position.set(mx, my, mz - groundOffset + yOff);
             if (sp.parent !== trunkBody) trunkBody.add(sp);
