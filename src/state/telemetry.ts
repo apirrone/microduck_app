@@ -33,6 +33,10 @@ export interface DuckSnapshot {
   y: number;
   yaw_rad: number;
   yaw_deg: number;
+  /// Contact-odometry foot anchor [x, y] in the odometry world frame; jumps to
+  /// the new support foot at each footfall. `null` entries when the runtime has
+  /// no odometry engine. The 3D viewer stamps a footprint on each jump.
+  contact_anchor?: [number | null, number | null];
   // Localisation health
   lock?: LockState;
   uptime_s?: number;

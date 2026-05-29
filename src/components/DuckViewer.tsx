@@ -198,8 +198,10 @@ export function DuckViewer(props: Props) {
       .setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
     const _fpYaw = new THREE.Quaternion();
     const _fpUp = new THREE.Vector3(0, 1, 0);
-    const _footPos = new THREE.Vector3();
-    const footLastStamp: (THREE.Vector2 | null)[] = [];
+    // Last contact-anchor we stamped (scene XZ). A footfall = the anchor
+    // jumping to the new support foot, so we stamp when it moves > ε.
+    let footLastAnchor: THREE.Vector2 | null = null;
+    const ANCHOR_EPS = 0.01;          // 1 cm — ignore re-projection jitter
 
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = false;
@@ -334,38 +336,26 @@ export function DuckViewer(props: Props) {
         else              groundFeet(rig);
 
         // ── Footprints ─────────────────────────────────────────────────
-        // Stamp the planted foot(s) along the path while awake. groundFeet()
-        // just refreshed the feet's world matrices. A foot counts as planted
-        // when it's near the lowest foot (the rendered gait clearance is small,
-        // so the band is generous); we stamp whenever a planted foot has moved
-        // a stride from its last print. This spaces prints by stride and avoids
-        // relying on detecting a clean lift→plant transition.
-        if (!props.asleep && rig.feet.length > 0) {
-          let minFootY = Infinity;
-          const fy: number[] = [];
-          for (const f of rig.feet) {
-            f.getWorldPosition(_footPos);
-            fy.push(_footPos.y);
-            if (_footPos.y < minFootY) minFootY = _footPos.y;
-          }
-          const PLANT_BAND = 0.03;   // within 3 cm of the lowest foot ⇒ planted
-          const MIN_STRIDE = 0.03;   // print spacing along the path
-          const yaw = props.snapshot?.yaw_rad ?? 0;
-          for (let i = 0; i < rig.feet.length; i++) {
-            if (fy[i] > minFootY + PLANT_BAND) continue;   // foot is in swing
-            rig.feet[i].getWorldPosition(_footPos);
-            const last = footLastStamp[i] ?? null;
-            if (last && Math.hypot(_footPos.x - last.x, _footPos.z - last.y) <= MIN_STRIDE) {
-              continue;   // hasn't moved far enough since its last print
+        // Stamp at the runtime's contact-odometry foot anchor each time it
+        // jumps to a new support foot (a real footfall). World frame, same
+        // MJCF→scene mapping as placeWorld: (x, y) → (x, -y). Only valid when
+        // the runtime is running odometry (anchor is non-null).
+        if (!props.asleep) {
+          const a = props.snapshot?.contact_anchor;
+          if (a && Number.isFinite(a[0]) && Number.isFinite(a[1])) {
+            const ax = a[0] as number;
+            const az = -(a[1] as number);
+            if (!footLastAnchor ||
+                Math.hypot(ax - footLastAnchor.x, az - footLastAnchor.y) > ANCHOR_EPS) {
+              const m = footprints[footprintNext];
+              footprintNext = (footprintNext + 1) % MAX_FOOTPRINTS;
+              m.position.set(ax, 0.002, az);
+              _fpYaw.setFromAxisAngle(_fpUp, props.snapshot?.yaw_rad ?? 0);
+              m.quaternion.copy(_fpYaw).multiply(FOOTPRINT_FLAT);
+              m.visible = true;
+              if (footLastAnchor) footLastAnchor.set(ax, az);
+              else footLastAnchor = new THREE.Vector2(ax, az);
             }
-            const m = footprints[footprintNext];
-            footprintNext = (footprintNext + 1) % MAX_FOOTPRINTS;
-            m.position.set(_footPos.x, 0.002, _footPos.z);
-            _fpYaw.setFromAxisAngle(_fpUp, yaw);
-            m.quaternion.copy(_fpYaw).multiply(FOOTPRINT_FLAT);
-            m.visible = true;
-            if (last) last.set(_footPos.x, _footPos.z);
-            else footLastStamp[i] = new THREE.Vector2(_footPos.x, _footPos.z);
           }
         }
 
