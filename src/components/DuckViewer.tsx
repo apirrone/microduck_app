@@ -26,6 +26,7 @@ export function DuckViewer(props: Props) {
   let camera: THREE.PerspectiveCamera;
   let controls: OrbitControls;
   let rig: DuckRig | null = null;
+  let placeholder: THREE.Mesh | null = null;
   let raf: number | null = null;
   const target = new Float32Array(64);
   const current = new Float32Array(64);
@@ -184,10 +185,25 @@ export function DuckViewer(props: Props) {
     // PWA at a different robot), we hot-swap the rig.
     let currentVersion: string | null = null;
 
+    // v1.6 shares v1.5's body and kinematics (only the head camera differs),
+    // and ships no separate mesh bundle — load the v1.5 rig for it.
+    const assetVersionFor = (version: string) => (version === "v1.6" ? "v1.5" : version);
+
     async function loadRigFor(version: string) {
+      // Claim the version up front so the reactive effect below doesn't re-fire
+      // loadRigFor for the same version while this async load is in flight (that
+      // would leak a fresh rig/placeholder on every telemetry poll).
+      currentVersion = version;
       try {
-        const k = await loadKinematics(`/robot/${version}/kinematics.json`);
+        const k = await loadKinematics(`/robot/${assetVersionFor(version)}/kinematics.json`);
         const next = await buildRig(k, { toon: true });
+        // A real rig loaded — drop any placeholder from a prior failed load.
+        if (placeholder) {
+          scene.remove(placeholder);
+          placeholder.geometry.dispose();
+          (placeholder.material as THREE.Material).dispose();
+          placeholder = null;
+        }
         if (rig) {
           scene.remove(rig.placer);
           // Best-effort cleanup — three.js doesn't auto-dispose.
@@ -207,15 +223,17 @@ export function DuckViewer(props: Props) {
         // convention, and groundFullBody's placer offset is inherited).
         const trunkBody = rig.bodies.get("trunk_base");
         if (trunkBody) trunkBody.add(camArrow);
-        currentVersion = version;
       } catch (e) {
         console.warn(`kinematics load failed for ${version} — placeholder`, e);
-        const placeholder = new THREE.Mesh(
-          new THREE.SphereGeometry(0.12, 16, 12),
-          new THREE.MeshToonMaterial({ color: 0xffcd3a }),
-        );
-        placeholder.position.y = 0.12;
-        scene.add(placeholder);
+        // Create the placeholder once; subsequent failed loads reuse it.
+        if (!placeholder) {
+          placeholder = new THREE.Mesh(
+            new THREE.SphereGeometry(0.12, 16, 12),
+            new THREE.MeshToonMaterial({ color: 0xffcd3a }),
+          );
+          placeholder.position.y = 0.12;
+          scene.add(placeholder);
+        }
       }
     }
 
