@@ -186,7 +186,9 @@ export function DuckViewer(props: Props) {
     for (let i = 0; i < MAX_FOOTPRINTS; i++) {
       const m = new THREE.Mesh(footprintGeo, footprintMat);
       m.visible = false;
-      m.scale.set(0.035, 0.055, 1);   // ~3.5 cm wide × 5.5 cm long
+      // Local x = length (along heading), local y = width. After FOOTPRINT_FLAT
+      // lays the plane down, local x stays world X = the duck's forward at yaw 0.
+      m.scale.set(0.055, 0.035, 1);   // ~5.5 cm long × 3.5 cm wide
       m.renderOrder = 1;              // draw after the floor
       scene.add(m);
       footprints.push(m);
@@ -197,7 +199,6 @@ export function DuckViewer(props: Props) {
     const _fpYaw = new THREE.Quaternion();
     const _fpUp = new THREE.Vector3(0, 1, 0);
     const _footPos = new THREE.Vector3();
-    const footWasPlanted: boolean[] = [];
     const footLastStamp: (THREE.Vector2 | null)[] = [];
 
     controls = new OrbitControls(camera, renderer.domElement);
@@ -333,11 +334,12 @@ export function DuckViewer(props: Props) {
         else              groundFeet(rig);
 
         // ── Footprints ─────────────────────────────────────────────────
-        // Stamp where each foot plants (lifted→planted transition), in world
-        // frame, while awake. groundFeet() just refreshed the feet's world
-        // matrices. Only XZ + relative height are used, so the grounding
-        // Y-offset (applied after) doesn't matter. Standing still yields no
-        // transitions; a min-stride gate kills sub-cm jitter.
+        // Stamp the planted foot(s) along the path while awake. groundFeet()
+        // just refreshed the feet's world matrices. A foot counts as planted
+        // when it's near the lowest foot (the rendered gait clearance is small,
+        // so the band is generous); we stamp whenever a planted foot has moved
+        // a stride from its last print. This spaces prints by stride and avoids
+        // relying on detecting a clean lift→plant transition.
         if (!props.asleep && rig.feet.length > 0) {
           let minFootY = Infinity;
           const fy: number[] = [];
@@ -346,28 +348,24 @@ export function DuckViewer(props: Props) {
             fy.push(_footPos.y);
             if (_footPos.y < minFootY) minFootY = _footPos.y;
           }
-          const PLANT_BAND = 0.02;   // within 2 cm of the lowest foot ⇒ planted
-          const MIN_STRIDE = 0.02;   // ignore stamps < 2 cm apart
+          const PLANT_BAND = 0.03;   // within 3 cm of the lowest foot ⇒ planted
+          const MIN_STRIDE = 0.03;   // print spacing along the path
           const yaw = props.snapshot?.yaw_rad ?? 0;
           for (let i = 0; i < rig.feet.length; i++) {
-            const planted = fy[i] <= minFootY + PLANT_BAND;
-            if (planted && !footWasPlanted[i]) {
-              rig.feet[i].getWorldPosition(_footPos);
-              const last = footLastStamp[i] ?? null;
-              const moved = !last ||
-                Math.hypot(_footPos.x - last.x, _footPos.z - last.y) > MIN_STRIDE;
-              if (moved) {
-                const m = footprints[footprintNext];
-                footprintNext = (footprintNext + 1) % MAX_FOOTPRINTS;
-                m.position.set(_footPos.x, 0.002, _footPos.z);
-                _fpYaw.setFromAxisAngle(_fpUp, yaw);
-                m.quaternion.copy(_fpYaw).multiply(FOOTPRINT_FLAT);
-                m.visible = true;
-                if (last) last.set(_footPos.x, _footPos.z);
-                else footLastStamp[i] = new THREE.Vector2(_footPos.x, _footPos.z);
-              }
+            if (fy[i] > minFootY + PLANT_BAND) continue;   // foot is in swing
+            rig.feet[i].getWorldPosition(_footPos);
+            const last = footLastStamp[i] ?? null;
+            if (last && Math.hypot(_footPos.x - last.x, _footPos.z - last.y) <= MIN_STRIDE) {
+              continue;   // hasn't moved far enough since its last print
             }
-            footWasPlanted[i] = planted;
+            const m = footprints[footprintNext];
+            footprintNext = (footprintNext + 1) % MAX_FOOTPRINTS;
+            m.position.set(_footPos.x, 0.002, _footPos.z);
+            _fpYaw.setFromAxisAngle(_fpUp, yaw);
+            m.quaternion.copy(_fpYaw).multiply(FOOTPRINT_FLAT);
+            m.visible = true;
+            if (last) last.set(_footPos.x, _footPos.z);
+            else footLastStamp[i] = new THREE.Vector2(_footPos.x, _footPos.z);
           }
         }
 
