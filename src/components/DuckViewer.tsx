@@ -171,6 +171,35 @@ export function DuckViewer(props: Props) {
     floor.receiveShadow = false;
     scene.add(floor);
 
+    // ── Footprint trail ─────────────────────────────────────────────
+    // Each time a foot plants, stamp a flat rectangle on the floor (world
+    // frame) so the duck leaves a breadcrumb trail of where it walked.
+    // Bounded ring buffer — past MAX the oldest print is recycled, so the
+    // scene never grows unbounded.
+    const MAX_FOOTPRINTS = 80;
+    const footprintGeo = new THREE.PlaneGeometry(1, 1);   // unit square, scaled per print
+    const footprintMat = new THREE.MeshBasicMaterial({
+      color: 0x5b4a32, transparent: true, opacity: 0.33,
+      depthWrite: false,                                  // don't z-fight the floor / each other
+    });
+    const footprints: THREE.Mesh[] = [];
+    for (let i = 0; i < MAX_FOOTPRINTS; i++) {
+      const m = new THREE.Mesh(footprintGeo, footprintMat);
+      m.visible = false;
+      m.scale.set(0.035, 0.055, 1);   // ~3.5 cm wide × 5.5 cm long
+      m.renderOrder = 1;              // draw after the floor
+      scene.add(m);
+      footprints.push(m);
+    }
+    let footprintNext = 0;            // ring-buffer cursor
+    const FOOTPRINT_FLAT = new THREE.Quaternion()
+      .setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+    const _fpYaw = new THREE.Quaternion();
+    const _fpUp = new THREE.Vector3(0, 1, 0);
+    const _footPos = new THREE.Vector3();
+    const footWasPlanted: boolean[] = [];
+    const footLastStamp: (THREE.Vector2 | null)[] = [];
+
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = false;
     controls.minDistance = 0.4;
@@ -303,6 +332,45 @@ export function DuckViewer(props: Props) {
         if (props.asleep) groundFullBody(rig);
         else              groundFeet(rig);
 
+        // ── Footprints ─────────────────────────────────────────────────
+        // Stamp where each foot plants (lifted→planted transition), in world
+        // frame, while awake. groundFeet() just refreshed the feet's world
+        // matrices. Only XZ + relative height are used, so the grounding
+        // Y-offset (applied after) doesn't matter. Standing still yields no
+        // transitions; a min-stride gate kills sub-cm jitter.
+        if (!props.asleep && rig.feet.length > 0) {
+          let minFootY = Infinity;
+          const fy: number[] = [];
+          for (const f of rig.feet) {
+            f.getWorldPosition(_footPos);
+            fy.push(_footPos.y);
+            if (_footPos.y < minFootY) minFootY = _footPos.y;
+          }
+          const PLANT_BAND = 0.02;   // within 2 cm of the lowest foot ⇒ planted
+          const MIN_STRIDE = 0.02;   // ignore stamps < 2 cm apart
+          const yaw = props.snapshot?.yaw_rad ?? 0;
+          for (let i = 0; i < rig.feet.length; i++) {
+            const planted = fy[i] <= minFootY + PLANT_BAND;
+            if (planted && !footWasPlanted[i]) {
+              rig.feet[i].getWorldPosition(_footPos);
+              const last = footLastStamp[i] ?? null;
+              const moved = !last ||
+                Math.hypot(_footPos.x - last.x, _footPos.z - last.y) > MIN_STRIDE;
+              if (moved) {
+                const m = footprints[footprintNext];
+                footprintNext = (footprintNext + 1) % MAX_FOOTPRINTS;
+                m.position.set(_footPos.x, 0.002, _footPos.z);
+                _fpYaw.setFromAxisAngle(_fpUp, yaw);
+                m.quaternion.copy(_fpYaw).multiply(FOOTPRINT_FLAT);
+                m.visible = true;
+                if (last) last.set(_footPos.x, _footPos.z);
+                else footLastStamp[i] = new THREE.Vector2(_footPos.x, _footPos.z);
+              }
+            }
+            footWasPlanted[i] = planted;
+          }
+        }
+
         // Camera debug arrow.  Trunk-frame coords; arrow is a child of
         // trunk_base so MJCF Z-up → scene Y-up is automatic and the
         // arrow inherits the duck's yaw.  We subtract the placer's
@@ -419,6 +487,8 @@ export function DuckViewer(props: Props) {
       if (zTimer) window.clearInterval(zTimer);
       ro.disconnect();
       controls.dispose();
+      footprintGeo.dispose();
+      footprintMat.dispose();
       renderer.dispose();
       mount.removeChild(renderer.domElement);
     });
