@@ -52,9 +52,9 @@ export interface DuckSnapshot {
   mood?: Record<string, number>;
   /// Heavily-smoothed average motor-bus voltage in volts.
   battery_v?: number;
-  /// Hardware variant — picks which mesh bundle the 3D viewer loads.
-  /// Values: "v1", "v1.5". Missing on older runtimes; PWA falls back
-  /// to v1.5 (the current/default model).
+  /// Hardware variant — picks which mesh bundle the 3D viewer loads and the
+  /// head-camera de-rotation in CameraView. Values: "v1", "v1.5", "v1.6".
+  /// Missing on older runtimes; PWA falls back to v1.5 (the current/default model).
   robot_version?: string;
   /// Detected objects in world frame.  Rendered as emoji sprites in the
   /// 3D view; empty/missing means nothing in sight.

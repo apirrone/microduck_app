@@ -1,9 +1,13 @@
 import { createEffect, onCleanup, Show } from "solid-js";
-import { cameraBlob, cameraAvailable } from "../state/connection";
+import { cameraBlob, cameraAvailable, snapshot } from "../state/connection";
 
-// Head camera is physically mounted rotated 90°. Flip the sign here if the
-// image ends up the wrong way round.
-const HEAD_CAM_ROTATION_DEG = -90;
+// Head-camera mount orientation depends on the robot variant:
+//   v1 / v1.5 → IMX500 mounted 90° CW   → de-rotate -90°
+//   v1.6      → Cam 3 mounted 180°       → de-rotate 180°
+// Falls back to -90° for older runtimes that don't report a version.
+function headCamRotationDeg(version: string | undefined): number {
+  return version === "v1.6" ? 180 : -90;
+}
 
 export function CameraView() {
   const [mb] = cameraBlob;
@@ -19,7 +23,7 @@ export function CameraView() {
     const u = URL.createObjectURL(blob);
     img.onload = () => {
       const w = img.naturalWidth, h = img.naturalHeight;
-      const rot = ((HEAD_CAM_ROTATION_DEG % 360) + 360) % 360;
+      const rot = ((headCamRotationDeg(snapshot()?.robot_version) % 360) + 360) % 360;
       const swapped = rot === 90 || rot === 270;
       canvas.width = swapped ? h : w;
       canvas.height = swapped ? w : h;
