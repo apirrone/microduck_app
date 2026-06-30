@@ -166,11 +166,13 @@ export async function buildRig(k: Kinematics, opts: BuildOpts = {}): Promise<Duc
   // Identify foot bodies for ground contact resolution. Names differ
   // per variant: v1 uses `foot`/`foot_2`; v1.5's left foot body is the
   // odd-named `seeed_bearing__configuration_default` (the visual mesh
-  // is `left_foot` attached to it) and the right foot is `right_foot_2`.
+  // is `left_foot` attached to it) and the right foot is `right_foot_2`;
+  // pre-alpha mounts the foot meshes on `ankle_left`/`ankle_right`.
   // If none match, fall back to any body whose name includes "foot".
   const FOOT_NAMES = [
     "foot", "foot_2",
     "seeed_bearing__configuration_default", "right_foot_2",
+    "ankle_left", "ankle_right",
   ];
   const feet: THREE.Object3D[] = [];
   for (const name of FOOT_NAMES) {
@@ -239,8 +241,9 @@ export function setJointAngles(rig: DuckRig, q: number[]) {
 // Mapped by joint name so a future upstream re-ordering doesn't silently
 // break the pose. Small breathing wobble is layered on `neck_pitch`.
 //
-// v1   : scene.xml `sitting` keyframe (legacy mechanical design).
-// v1.5 : scene.xml `SIT` keyframe (new legs, head folds the other way).
+// v1        : scene.xml `sitting` keyframe (legacy mechanical design).
+// v1.5      : scene.xml `SIT` keyframe (new legs, head folds the other way).
+// pre-alpha : scene.xml `SIT` keyframe ctrl values (mjlab_microduck).
 const SITTING_POSES: Record<string, Record<string, number>> = {
   v1: {
     left_hip_yaw:     0.532,
@@ -266,6 +269,22 @@ const SITTING_POSES: Record<string, Record<string, number>> = {
     left_ankle:       0.0,
     neck_pitch:       1.2217,
     head_pitch:      -1.2217,
+    head_yaw:         0.0,
+    head_roll:        0.0,
+    right_hip_yaw:    0.0,
+    right_hip_roll:   0.0,
+    right_hip_pitch:  0.5236,
+    right_knee:      -1.0472,
+    right_ankle:      0.0,
+  },
+  "pre-alpha": {
+    left_hip_yaw:     0.0,
+    left_hip_roll:    0.0,
+    left_hip_pitch:  -0.5236,
+    left_knee:        1.0472,
+    left_ankle:       0.0,
+    neck_pitch:       0.5,
+    head_pitch:      -1.6,
     head_yaw:         0.0,
     head_roll:        0.0,
     right_hip_yaw:    0.0,

@@ -2,7 +2,8 @@
 """Parse each vendored microduck MJCF, emit runtime-friendly kinematics
 JSONs, and copy referenced STL meshes.
 
-We ship two robot variants (v1 and v1.5). For each, the script writes:
+We ship several robot variants (v1, v1.5, pre-alpha), auto-discovered as
+subdirectories of robot_assets/. For each, the script writes:
     public/robot/<variant>/kinematics.json
     public/robot/<variant>/meshes/*.stl
 
