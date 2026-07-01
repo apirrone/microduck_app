@@ -284,7 +284,7 @@ const SITTING_POSES: Record<string, Record<string, number>> = {
     left_knee:        1.0472,
     left_ankle:       0.0,
     neck_pitch:       0.5,
-    head_pitch:      -1.6,
+    head_pitch:       1.6,
     head_yaw:         0.0,
     head_roll:        0.0,
     right_hip_yaw:    0.0,
