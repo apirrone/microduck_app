@@ -184,6 +184,11 @@ export function startCameraPolling() {
   }, 500);
 
   (async () => {
+    // Consecutive stream attempts that produced zero frames. After a few,
+    // assume the stream is unusable on this runtime (pre-v5.1.9 404, CORS,
+    // proxy…) and poll snapshots for a while before probing the stream
+    // again — polling works against every runtime version.
+    let dryRuns = 0;
     while (!stopped) {
       const base = robotUrl();
       ctrl = new AbortController();
@@ -191,27 +196,36 @@ export function startCameraPolling() {
       const urlCheck = window.setInterval(() => {
         if (robotUrl() !== base) ctrl?.abort();
       }, 500);
+      let gotFrames = false;
       try {
         const r = await fetch(joinUrl(base, "/camera.mjpg"), {
           cache: "no-store",
           signal: ctrl.signal,
         });
-        if (r.status === 404) {
-          // Pre-v5.1.9 runtime — poll snapshots until stop or URL change.
-          while (!stopped && robotUrl() === base) {
-            const { blob } = await fetchCamera();
-            if (blob) emit(blob);
-            await sleep(150);
-          }
-        } else if (r.ok && r.body) {
-          await readMjpeg(r.body, emit);
+        if (r.ok && r.body && r.status !== 404) {
+          await readMjpeg(r.body, (b) => {
+            gotFrames = true;
+            emit(b);
+          });
         }
       } catch {
-        /* robot unreachable / stream dropped / aborted — retry below */
+        /* robot unreachable / stream dropped / aborted — handled below */
       } finally {
         window.clearInterval(urlCheck);
       }
-      if (!stopped) await sleep(1000);
+      if (stopped) break;
+      dryRuns = gotFrames ? 0 : dryRuns + 1;
+      if (dryRuns >= 3) {
+        // Snapshot-poll for 20 s, then give the stream another chance.
+        const until = Date.now() + 20_000;
+        while (!stopped && robotUrl() === base && Date.now() < until) {
+          const { blob } = await fetchCamera();
+          if (blob) emit(blob);
+          await sleep(150);
+        }
+      } else {
+        await sleep(1000);
+      }
     }
   })();
 
