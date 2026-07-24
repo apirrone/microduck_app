@@ -96,6 +96,13 @@ export function stopMapPolling() {
   }
 }
 
+// ── Camera ──────────────────────────────────────────────────────────────
+// Prefers the runtime's live MJPEG push stream (`GET /camera.mjpg`, added
+// in runtime v5.1.9): one multipart part per captured frame, so the view
+// runs at the full camera rate (30 fps) with no polling. Older runtimes
+// 404 on that path — those fall back to polling `/camera.jpg` at ~6.7 Hz.
+// Both paths feed the same `cameraBlob` signal consumed by CameraView.
+
 async function fetchCamera(): Promise<{ blob: Blob | null; reachable: boolean }> {
   try {
     const r = await fetch(joinUrl(robotUrl(), "/camera.jpg"), {
@@ -112,22 +119,113 @@ async function fetchCamera(): Promise<{ blob: Blob | null; reachable: boolean }>
   }
 }
 
-let cameraTicker: number | null = null;
-export function startCameraPolling(periodMs = 150) {
-  if (cameraTicker != null) return;
-  const tick = async () => {
-    const { blob, reachable } = await fetchCamera();
-    setCameraAvailable(reachable && blob != null);
-    if (blob) cameraBlob[1](blob);
-  };
-  tick();
-  cameraTicker = window.setInterval(tick, periodMs);
-}
-export function stopCameraPolling() {
-  if (cameraTicker != null) {
-    window.clearInterval(cameraTicker);
-    cameraTicker = null;
+// Parse a multipart/x-mixed-replace MJPEG body, invoking `emit` once per
+// complete JPEG part. Returns when the stream ends or is aborted.
+async function readMjpeg(
+  body: ReadableStream<Uint8Array>,
+  emit: (b: Blob) => void,
+): Promise<void> {
+  const reader = body.getReader();
+  const headerEnd = [13, 10, 13, 10]; // \r\n\r\n
+  let buf = new Uint8Array(0);
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) return;
+    const next = new Uint8Array(buf.length + value.length);
+    next.set(buf);
+    next.set(value, buf.length);
+    buf = next;
+    for (;;) {
+      const he = indexOfSeq(buf, headerEnd);
+      if (he < 0) break;
+      const head = new TextDecoder().decode(buf.subarray(0, he));
+      const m = head.match(/content-length:\s*(\d+)/i);
+      if (!m) {
+        buf = buf.subarray(he + 4);
+        continue;
+      }
+      const len = parseInt(m[1], 10);
+      const start = he + 4;
+      if (buf.length < start + len) break; // body incomplete — need more bytes
+      emit(new Blob([buf.subarray(start, start + len)], { type: "image/jpeg" }));
+      buf = buf.subarray(start + len);
+    }
+    if (buf.length > 4 << 20) buf = new Uint8Array(0); // malformed-input guard
   }
+}
+
+function indexOfSeq(hay: Uint8Array, needle: number[]): number {
+  outer: for (let i = 0; i + needle.length <= hay.length; i++) {
+    for (let j = 0; j < needle.length; j++) {
+      if (hay[i + j] !== needle[j]) continue outer;
+    }
+    return i;
+  }
+  return -1;
+}
+
+let cameraStop: (() => void) | null = null;
+
+export function startCameraPolling() {
+  if (cameraStop) return;
+  let stopped = false;
+  let ctrl: AbortController | null = null;
+  let lastFrameMs = 0;
+
+  const emit = (blob: Blob) => {
+    lastFrameMs = Date.now();
+    setCameraAvailable(true);
+    cameraBlob[1](blob);
+  };
+
+  // "live" badge: a frame counts as fresh for 2 s.
+  const watchdog = window.setInterval(() => {
+    if (Date.now() - lastFrameMs > 2000) setCameraAvailable(false);
+  }, 500);
+
+  (async () => {
+    while (!stopped) {
+      const base = robotUrl();
+      ctrl = new AbortController();
+      // Restart the stream if the robot URL is changed in the gear menu.
+      const urlCheck = window.setInterval(() => {
+        if (robotUrl() !== base) ctrl?.abort();
+      }, 500);
+      try {
+        const r = await fetch(joinUrl(base, "/camera.mjpg"), {
+          cache: "no-store",
+          signal: ctrl.signal,
+        });
+        if (r.status === 404) {
+          // Pre-v5.1.9 runtime — poll snapshots until stop or URL change.
+          while (!stopped && robotUrl() === base) {
+            const { blob } = await fetchCamera();
+            if (blob) emit(blob);
+            await sleep(150);
+          }
+        } else if (r.ok && r.body) {
+          await readMjpeg(r.body, emit);
+        }
+      } catch {
+        /* robot unreachable / stream dropped / aborted — retry below */
+      } finally {
+        window.clearInterval(urlCheck);
+      }
+      if (!stopped) await sleep(1000);
+    }
+  })();
+
+  cameraStop = () => {
+    stopped = true;
+    ctrl?.abort();
+    window.clearInterval(watchdog);
+    setCameraAvailable(false);
+  };
+}
+
+export function stopCameraPolling() {
+  cameraStop?.();
+  cameraStop = null;
 }
 
 export async function postGoal(x: number, y: number): Promise<boolean> {
