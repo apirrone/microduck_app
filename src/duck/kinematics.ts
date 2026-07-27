@@ -167,7 +167,7 @@ export async function buildRig(k: Kinematics, opts: BuildOpts = {}): Promise<Duc
   // per variant: v1 uses `foot`/`foot_2`; v1.5's left foot body is the
   // odd-named `seeed_bearing__configuration_default` (the visual mesh
   // is `left_foot` attached to it) and the right foot is `right_foot_2`;
-  // pre-alpha mounts the foot meshes on `ankle_left`/`ankle_right`.
+  // alpha mounts the foot meshes on `ankle_left`/`ankle_right`.
   // If none match, fall back to any body whose name includes "foot".
   const FOOT_NAMES = [
     "foot", "foot_2",
@@ -243,7 +243,7 @@ export function setJointAngles(rig: DuckRig, q: number[]) {
 //
 // v1        : scene.xml `sitting` keyframe (legacy mechanical design).
 // v1.5      : scene.xml `SIT` keyframe (new legs, head folds the other way).
-// pre-alpha : scene.xml `SIT` keyframe ctrl values (mjlab_microduck).
+// alpha : scene.xml `SIT` keyframe ctrl values (mjlab_microduck).
 const SITTING_POSES: Record<string, Record<string, number>> = {
   v1: {
     left_hip_yaw:     0.532,
@@ -277,7 +277,7 @@ const SITTING_POSES: Record<string, Record<string, number>> = {
     right_knee:      -1.0472,
     right_ankle:      0.0,
   },
-  "pre-alpha": {
+  "alpha": {
     left_hip_yaw:     0.0,
     left_hip_roll:    0.0,
     left_hip_pitch:  -0.5236,

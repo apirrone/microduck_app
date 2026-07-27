@@ -1987,5 +1987,5 @@
   "right_knee",
   "right_ankle"
  ],
- "mesh_dir": "/robot/pre-alpha/meshes"
+ "mesh_dir": "/robot/alpha/meshes"
 }
