@@ -174,30 +174,31 @@ export function DuckViewer(props: Props) {
     // ── Footprint trail ─────────────────────────────────────────────
     // Each time a foot plants, stamp a flat rectangle on the floor (world
     // frame) so the duck leaves a breadcrumb trail of where it walked.
-    // Bounded ring buffer — past MAX the oldest print is recycled, so the
-    // scene never grows unbounded.
-    const MAX_FOOTPRINTS = 80;
+    // A single InstancedMesh renders every print in one draw call, so the
+    // cap is a memory backstop (~7 h of continuous walking), not a visual
+    // limit; past it the oldest print is recycled ring-buffer style.
+    const MAX_FOOTPRINTS = 50_000;
     const footprintGeo = new THREE.PlaneGeometry(1, 1);   // unit square, scaled per print
     const footprintMat = new THREE.MeshBasicMaterial({
       color: 0x5b4a32, transparent: true, opacity: 0.33,
       depthWrite: false,                                  // don't z-fight the floor / each other
     });
-    const footprints: THREE.Mesh[] = [];
-    for (let i = 0; i < MAX_FOOTPRINTS; i++) {
-      const m = new THREE.Mesh(footprintGeo, footprintMat);
-      m.visible = false;
-      // Local x = length (along heading), local y = width. After FOOTPRINT_FLAT
-      // lays the plane down, local x stays world X = the duck's forward at yaw 0.
-      m.scale.set(0.055, 0.035, 1);   // ~5.5 cm long × 3.5 cm wide
-      m.renderOrder = 1;              // draw after the floor
-      scene.add(m);
-      footprints.push(m);
-    }
+    const footprintMesh = new THREE.InstancedMesh(footprintGeo, footprintMat, MAX_FOOTPRINTS);
+    footprintMesh.count = 0;                    // grows as prints land
+    footprintMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    footprintMesh.frustumCulled = false;        // prints span the whole walked area
+    footprintMesh.renderOrder = 1;              // draw after the floor
+    scene.add(footprintMesh);
     let footprintNext = 0;            // ring-buffer cursor
     const FOOTPRINT_FLAT = new THREE.Quaternion()
       .setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+    // Local x = length (along heading), local y = width. After FOOTPRINT_FLAT
+    // lays the plane down, local x stays world X = the duck's forward at yaw 0.
+    const FOOTPRINT_SCALE = new THREE.Vector3(0.055, 0.035, 1);  // ~5.5 cm long × 3.5 cm wide
     const _fpYaw = new THREE.Quaternion();
     const _fpUp = new THREE.Vector3(0, 1, 0);
+    const _fpPos = new THREE.Vector3();
+    const _fpMat = new THREE.Matrix4();
     // Last contact-anchor we stamped (scene XZ). A footfall = the anchor
     // jumping to the new support foot, so we stamp when it moves > ε.
     let footLastAnchor: THREE.Vector2 | null = null;
@@ -347,12 +348,16 @@ export function DuckViewer(props: Props) {
             const az = -(a[1] as number);
             if (!footLastAnchor ||
                 Math.hypot(ax - footLastAnchor.x, az - footLastAnchor.y) > ANCHOR_EPS) {
-              const m = footprints[footprintNext];
+              const i = footprintNext;
               footprintNext = (footprintNext + 1) % MAX_FOOTPRINTS;
-              m.position.set(ax, 0.002, az);
-              _fpYaw.setFromAxisAngle(_fpUp, props.snapshot?.yaw_rad ?? 0);
-              m.quaternion.copy(_fpYaw).multiply(FOOTPRINT_FLAT);
-              m.visible = true;
+              _fpPos.set(ax, 0.002, az);
+              _fpYaw.setFromAxisAngle(_fpUp, props.snapshot?.yaw_rad ?? 0).multiply(FOOTPRINT_FLAT);
+              _fpMat.compose(_fpPos, _fpYaw, FOOTPRINT_SCALE);
+              footprintMesh.setMatrixAt(i, _fpMat);
+              footprintMesh.count = Math.max(footprintMesh.count, i + 1);
+              // Upload only this slot's matrix, not the whole 50k-slot buffer.
+              footprintMesh.instanceMatrix.addUpdateRange(i * 16, 16);
+              footprintMesh.instanceMatrix.needsUpdate = true;
               if (footLastAnchor) footLastAnchor.set(ax, az);
               else footLastAnchor = new THREE.Vector2(ax, az);
             }
@@ -475,6 +480,7 @@ export function DuckViewer(props: Props) {
       if (zTimer) window.clearInterval(zTimer);
       ro.disconnect();
       controls.dispose();
+      footprintMesh.dispose();   // frees the per-instance matrix buffer
       footprintGeo.dispose();
       footprintMat.dispose();
       renderer.dispose();
