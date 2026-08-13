@@ -42,9 +42,16 @@ export function MapView() {
   async function onCanvasClick(ev: MouseEvent) {
     const s = snapshot();
     if (!s?.map || s.map.cell_m <= 0) return;
+    // The canvas is displayed with object-fit: contain, so the bitmap is
+    // letterboxed inside the element — map the click through the actual
+    // displayed content rect, not the element rect.
     const rect = canvas.getBoundingClientRect();
-    const px = (ev.clientX - rect.left) * (canvas.width / rect.width);
-    const py = (ev.clientY - rect.top) * (canvas.height / rect.height);
+    const scale = Math.min(rect.width / canvas.width, rect.height / canvas.height);
+    const offX = rect.left + (rect.width - canvas.width * scale) / 2;
+    const offY = rect.top + (rect.height - canvas.height * scale) / 2;
+    const px = (ev.clientX - offX) / scale;
+    const py = (ev.clientY - offY) / scale;
+    if (px < 0 || py < 0 || px > canvas.width || py > canvas.height) return;
     const x = s.map.x_min + px * s.map.cell_m;
     const y = s.map.y_max - py * s.map.cell_m;
     await postGoal(x, y);
